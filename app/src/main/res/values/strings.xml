@@ -1,3 +1,16 @@
 <resources>
     <string name="app_name">Parent\'s Meal Planner</string>
+    <string name="meal_holder_title_default">Meal Time</string>
+    <string name="breakfast">Breakfast</string>
+    <string name="lunch">Lunch</string>
+    <string name="dinner">Dinner</string>
+    <string name="snack">Snack</string>
+    <string name="default_part_of_day">breunner</string>
+    <string name="placeholder_day">placeholder_day</string>
+    <string name="meal_contents_placeholder">This is where the meal goes!</string>
+    <string-array name="meals_of_the_day">
+        <item>@string/breakfast</item>
+        <item>@string/lunch</item>
+        <item>@string/dinner</item>
+    </string-array>
 </resources>
