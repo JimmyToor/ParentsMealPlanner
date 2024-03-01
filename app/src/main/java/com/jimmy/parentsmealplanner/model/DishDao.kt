@@ -24,7 +24,7 @@ interface DishDao {
     fun getDish(id: Int): Flow<Dish>
 
     @Query("SELECT * from dishes")
-    fun getAllDishes(id: Int): Flow<Dish>
+    fun getAllDishes(): Flow<Dish>
 
     @Transaction
     @Query("SELECT * FROM dishes WHERE id = :id")

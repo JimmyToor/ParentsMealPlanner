@@ -5,17 +5,13 @@ import androidx.room.Entity
 import androidx.room.Junction
 import androidx.room.PrimaryKey
 import androidx.room.Relation
-import kotlinx.serialization.SerialName
 
 @Entity(tableName = "dishes")
 data class Dish(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
     val name: String,
-    @SerialName(value = "img_src")
-    val imgSrc: String,
-    // rating enum
-    val rating: Int,
+    val rating: Rating = Rating.THREE,
 )
 
 data class DishWithMeals(
@@ -26,7 +22,7 @@ data class DishWithMeals(
         entity = Meal::class,
         entityColumn = "id",
         associateBy = Junction(
-            DishesInMeal::class,
+            DishInMeal::class,
             parentColumn = "dishId",
             entityColumn = "mealId"
         )

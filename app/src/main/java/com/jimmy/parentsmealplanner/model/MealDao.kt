@@ -8,6 +8,7 @@ import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
+import kotlinx.datetime.LocalDate
 
 @Dao
 interface MealDao {
@@ -21,10 +22,16 @@ interface MealDao {
     suspend fun delete(meal: Meal)
 
     @Query("SELECT * FROM meals WHERE id = :id")
-    fun getMeal(id: Int): Flow<Meal>
+    suspend fun getMeal(id: Int): Meal
+
+    @Query("SELECT * FROM meals WHERE id = :id")
+    fun getMealStream(id: Int): Flow<Meal>
 
     @Query("SELECT * FROM meals")
-    fun getAllMeals(id: Int): Flow<Meal>
+    suspend fun getAllMeals(): List<Meal>
+
+    @Query("SELECT * FROM meals")
+    fun getAllMealsStream(): Flow<List<Meal>>
 
     @Transaction
     @Query("SELECT * FROM meals WHERE id = :id")
@@ -35,11 +42,12 @@ interface MealDao {
     fun getAllMealsWithDishes(): Flow<List<MealWithDishes>>
 
     @Query("SELECT * FROM meals WHERE date > :dateStart AND date < :dateEnd ORDER BY date DESC")
-    fun getMealsInDateRange(dateStart: Long, dateEnd: Long): Flow<List<Meal>>
+    fun getMealsInDateRange(dateStart: LocalDate, dateEnd: LocalDate): Flow<List<Meal>>
 
     @Transaction
     @Query("SELECT * FROM meals WHERE date > :dateStart AND date < :dateEnd ORDER BY date DESC")
-    fun getMealsWithDishesInDateRange(dateStart: Long, dateEnd: Long): Flow<List<MealWithDishes>>
+    fun getMealsWithDishesInDateRange(dateStart: LocalDate, dateEnd: LocalDate):
+        Flow<List<MealWithDishes>>
 
     @Query("SELECT * FROM meals WHERE name LIKE :searchQuery")
     fun searchForMeal(searchQuery: String): Flow<List<Meal>>
