@@ -1,20 +1,24 @@
-package com.jimmy.parentsmealplanner.model
+package com.jimmy.parentsmealplanner.ui.shared
 
+import com.jimmy.parentsmealplanner.model.Dish
+import com.jimmy.parentsmealplanner.model.DishInMeal
+import com.jimmy.parentsmealplanner.model.Meal
+import com.jimmy.parentsmealplanner.model.MealWithDishes
 import kotlinx.datetime.LocalDate
 
 data class MealDetails(
     val id: Int = 0,
     val occasion: Occasion = Occasion.BREAKFAST,
-    val rating: Rating = Rating.ONE,
+    val rating: Rating = Rating.LIKEIT,
     val name: String = "",
     val date: LocalDate = LocalDate(1, 1, 1),
-    val dishes: List<DishDetails>? = listOf(DishDetails()),
+    val dishes: List<DishDetails>? = listOf(),
 )
 
 data class DishDetails(
     val id: Int = 0,
     val name: String = "",
-    val rating: Rating = Rating.ONE,
+    val rating: Rating = Rating.LIKEIT,
 )
 
 /**
@@ -83,6 +87,20 @@ fun Dish.toDishDetails(): DishDetails =
         rating = rating,
     )
 
+/**
+ * Converts a [Dish] to a [DishInMeal].
+ */
+fun Dish.toDishInMeal(mealId: Int): DishInMeal =
+    DishInMeal(mealId = mealId, dishId = id)
+
+/**
+ * Converts a [MealWithDishes] to a [Dish].
+ */
+fun MealWithDishes.toDishesInMeal(): List<DishInMeal> =
+    dishes.map {
+            dish -> DishInMeal(mealId = meal.id, dishId = dish.id)
+    }
+
 enum class Occasion {
     BREAKFAST,
     LUNCH,
@@ -91,9 +109,7 @@ enum class Occasion {
 }
 
 enum class Rating {
-    ONE,
-    TWO,
-    THREE,
-    FOUR,
-    FIVE,
+    LEARNING,
+    LIKEIT,
+    LOVEIT,
 }

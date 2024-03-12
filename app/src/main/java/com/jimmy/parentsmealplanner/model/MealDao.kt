@@ -15,6 +15,9 @@ interface MealDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(meal: Meal)
 
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertAll(meals: List<Meal>)
+
     @Update
     suspend fun update(meal: Meal)
 
@@ -22,7 +25,7 @@ interface MealDao {
     suspend fun delete(meal: Meal)
 
     @Query("SELECT * FROM meals WHERE id = :id")
-    suspend fun getMeal(id: Int): Meal
+    suspend fun getMeal(id: Int): Meal?
 
     @Query("SELECT * FROM meals WHERE id = :id")
     fun getMealStream(id: Int): Flow<Meal>
@@ -35,20 +38,24 @@ interface MealDao {
 
     @Transaction
     @Query("SELECT * FROM meals WHERE id = :id")
-    fun getMealWithDishes(id: Int): Flow<MealWithDishes>
+    suspend fun getMealWithDishes(id: Int): MealWithDishes?
+
+    @Transaction
+    @Query("SELECT * FROM meals WHERE id = :id")
+    fun getMealWithDishesStream(id: Int): Flow<MealWithDishes>
 
     @Transaction
     @Query("SELECT * FROM meals")
-    fun getAllMealsWithDishes(): Flow<List<MealWithDishes>>
+    fun getAllMealsWithDishesStream(): Flow<List<MealWithDishes>>
 
-    @Query("SELECT * FROM meals WHERE date > :dateStart AND date < :dateEnd ORDER BY date DESC")
+    @Query("SELECT * FROM meals WHERE date >= :dateStart AND date <= :dateEnd ORDER BY date DESC")
     fun getMealsInDateRange(dateStart: LocalDate, dateEnd: LocalDate): Flow<List<Meal>>
 
     @Transaction
-    @Query("SELECT * FROM meals WHERE date > :dateStart AND date < :dateEnd ORDER BY date DESC")
+    @Query("SELECT * FROM meals WHERE date >= :dateStart AND date <= :dateEnd ORDER BY date DESC")
     fun getMealsWithDishesInDateRange(dateStart: LocalDate, dateEnd: LocalDate):
         Flow<List<MealWithDishes>>
 
-    @Query("SELECT * FROM meals WHERE name LIKE :searchQuery")
-    fun searchForMeal(searchQuery: String): Flow<List<Meal>>
+    @Query("SELECT * FROM meals WHERE name LIKE '%' || :searchTerm || '%'")
+    fun searchForMeals(searchTerm: String?): Flow<List<Meal>>
 }

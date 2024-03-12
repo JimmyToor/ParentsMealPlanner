@@ -13,9 +13,11 @@ import androidx.room.TypeConverters
 )
 @TypeConverters(Converters::class)
 abstract class MealPlannerDatabase : RoomDatabase() {
+    abstract fun mealDao(): MealDao
+
     abstract fun dishDao(): DishDao
 
-    abstract fun mealDao(): MealDao
+    abstract fun dishInMealDao(): DishInMealDao
 
     companion object {
         @Volatile

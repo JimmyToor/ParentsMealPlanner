@@ -5,13 +5,14 @@ import androidx.room.Entity
 import androidx.room.Junction
 import androidx.room.PrimaryKey
 import androidx.room.Relation
+import com.jimmy.parentsmealplanner.ui.shared.Rating
 
 @Entity(tableName = "dishes")
 data class Dish(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
-    val name: String,
-    val rating: Rating = Rating.THREE,
+    val name: String = "New Dish",
+    val rating: Rating = Rating.LIKEIT,
 )
 
 data class DishWithMeals(

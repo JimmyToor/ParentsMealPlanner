@@ -5,6 +5,8 @@ import androidx.room.Entity
 import androidx.room.Junction
 import androidx.room.PrimaryKey
 import androidx.room.Relation
+import com.jimmy.parentsmealplanner.ui.shared.Occasion
+import com.jimmy.parentsmealplanner.ui.shared.Rating
 import kotlinx.datetime.LocalDate
 
 @Entity(tableName = "meals")
@@ -12,9 +14,9 @@ data class Meal(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
     val occasion: Occasion = Occasion.BREAKFAST,
-    val rating: Rating = Rating.THREE,
-    val name: String = "",
-    val date: LocalDate = LocalDate(0, 0, 0),
+    val rating: Rating = Rating.LIKEIT,
+    val name: String = "New Meal",
+    val date: LocalDate = LocalDate(1, 1, 1),
 )
 
 data class MealWithDishes(
