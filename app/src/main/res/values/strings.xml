@@ -1,13 +1,22 @@
 <resources>
     <string name="app_name">Parent\'s Meal Planner</string>
-    <string name="meal_holder_title_default">Meal Time</string>
+    <string name="occasion_placeholder">Meal Occasion</string>
     <string name="breakfast">Breakfast</string>
     <string name="lunch">Lunch</string>
     <string name="dinner">Dinner</string>
     <string name="snack">Snack</string>
-    <string name="default_part_of_day">breunner</string>
-    <string name="placeholder_day">placeholder_day</string>
+    <string name="day_placeholder">placeholder_day</string>
     <string name="meal_contents_placeholder">This is where the meal goes!</string>
+    <string name="planner_date_entry">%s, %s %s</string>
+    <string name="meal_detail">Meal Detail</string>
+    <string name="back_button">Back</string>
+    <string name="add_meal">Add Meal +</string>
+    <string name="dish_name_placeholder">This is where a dish goes!</string>
+    <string name="add_meal_button_text">Add a meal</string>
+    <string name="meal_name_req">Meal Name Required</string>
+    <string name="required_fields">Please fill in the required fields</string>
+    <string name="save">save</string>
+    <string name="occasion">Occasion</string>
     <string-array name="meals_of_the_day">
         <item>@string/breakfast</item>
         <item>@string/lunch</item>

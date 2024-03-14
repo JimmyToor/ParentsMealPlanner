@@ -16,6 +16,10 @@ interface AppContainer {
 class AppDataContainer(private val context: Context) : AppContainer {
 
     override val mealRepository: MealRepository by lazy {
-        LocalMealRepository(MealPlannerDatabase.getDatabase(context).mealDao())
+        LocalMealRepository(
+            MealPlannerDatabase.getDatabase(context).mealDao(),
+            MealPlannerDatabase.getDatabase(context).dishDao(),
+            MealPlannerDatabase.getDatabase(context).dishInMealDao()
+            )
     }
 }

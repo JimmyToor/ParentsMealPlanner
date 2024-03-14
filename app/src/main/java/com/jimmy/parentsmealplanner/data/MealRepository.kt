@@ -1,5 +1,6 @@
 package com.jimmy.parentsmealplanner.data
 
+import com.jimmy.parentsmealplanner.model.Dish
 import com.jimmy.parentsmealplanner.model.Meal
 import com.jimmy.parentsmealplanner.model.MealWithDishes
 import kotlinx.coroutines.flow.Flow
@@ -10,14 +11,24 @@ interface MealRepository {
 
     fun getMealStream(id: Int): Flow<Meal?>
 
+    suspend fun getMealWithDishes(id: Int): MealWithDishes?
+
     fun getMealsWithDishesInDateRangeStream(dateStart: LocalDate, dateEnd: LocalDate):
         Flow<List<MealWithDishes>>
 
     fun getMealWithDishesStream(id: Int): Flow<MealWithDishes?>
 
-    suspend fun insertItem(meal: Meal)
+    suspend fun insertMeal(meal: Meal)
 
-    suspend fun deleteItem(meal: Meal)
+    suspend fun insertMealWithDishes(mealWithDishes: MealWithDishes)
 
-    suspend fun updateItem(meal: Meal)
+    suspend fun upsertMealWithDishes(mealWithDishes: MealWithDishes)
+
+    suspend fun deleteMeal(meal: Meal)
+
+    suspend fun updateMeal(meal: Meal)
+
+    fun searchForMeals(searchTerm: String): Flow<List<Meal>>
+
+    suspend fun deleteDishesFromMeal(mealId: Int, dishes: List<Dish>)
 }
