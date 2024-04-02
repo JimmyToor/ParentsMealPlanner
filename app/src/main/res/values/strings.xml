@@ -17,6 +17,8 @@
     <string name="required_fields">Please fill in the required fields</string>
     <string name="save">save</string>
     <string name="occasion">Occasion</string>
+    <string name="add_dish">Add Dish</string>
+    <string name="dish_name_req">Dish Name Required</string>
     <string-array name="meals_of_the_day">
         <item>@string/breakfast</item>
         <item>@string/lunch</item>

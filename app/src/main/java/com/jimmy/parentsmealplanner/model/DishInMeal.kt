@@ -13,19 +13,19 @@ import androidx.room.ForeignKey
     foreignKeys = [
         ForeignKey(
             entity = Meal::class,
-            parentColumns = ["id"],
+            parentColumns = ["mealId"],
             childColumns = ["mealId"],
             onDelete = ForeignKey.CASCADE,
         ),
         ForeignKey(
             entity = Dish::class,
-            parentColumns = ["id"],
+            parentColumns = ["dishId"],
             childColumns = ["dishId"],
             onDelete = ForeignKey.CASCADE,
         ),
     ],
 )
 data class DishInMeal(
-    val mealId: Int,
-    val dishId: Int,
+    val mealId: Long,
+    val dishId: Long,
 )

@@ -29,8 +29,8 @@ fun MealPlanningNavHost(
         composable(MealPlanningDest.route) {
             MealPlanner(
                 navigateToMealDetail = {
-                    mealId, date, occasion -> navController.navigate(
-                    "${MealDetailDest.route}/${date.toEpochDays()}/${occasion}/$mealId"
+                    mealId, date, occasion, userId, instanceId -> navController.navigate(
+                    "${MealDetailDest.route}/${date.toEpochDays()}/${occasion}/$mealId/${userId}/${instanceId}"
                     )
                 }
             )
@@ -38,11 +38,13 @@ fun MealPlanningNavHost(
         composable(
             route = MealDetailDest.routeWithArgs,
             arguments = listOf(
-                navArgument(MealDetailDest.MEAL_ID_ARG) { type = NavType.IntType },
+                navArgument(MealDetailDest.MEAL_ID_ARG) { type = NavType.LongType },
                 navArgument(MealDetailDest.DATE_ARG) { type = NavType.IntType },
                 navArgument(MealDetailDest.OCCASION_ARG) {
                     type = NavType.EnumType(Occasion::class.java)
                 },
+                navArgument(MealDetailDest.INSTANCE_ID_ARG) { type = NavType.LongType },
+                navArgument(MealDetailDest.USER_ID_ARG) { type = NavType.LongType },
             )
         ) {
             MealDetail(

@@ -7,8 +7,18 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
 @Database(
-    entities = [Dish::class, Meal::class, DishInMeal::class],
-    version = 1,
+    entities = [
+        Dish::class,
+        Meal::class,
+        DishInMeal::class,
+        MealInstance::class,
+        User::class,
+    ],
+    views = [
+        ViewMealsAndInstances::class,
+        ViewMeals::class,
+    ],
+    version = 2,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -18,6 +28,10 @@ abstract class MealPlannerDatabase : RoomDatabase() {
     abstract fun dishDao(): DishDao
 
     abstract fun dishInMealDao(): DishInMealDao
+
+    abstract fun mealInstanceDao(): MealInstanceDao
+
+    abstract fun plannerUserDao(): UserDao
 
     companion object {
         @Volatile

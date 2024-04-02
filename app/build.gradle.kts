@@ -100,6 +100,7 @@ dependencies {
     implementation("com.google.dagger:dagger:2.50")
     implementation("com.google.dagger:hilt-core:2.50")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
+    implementation("androidx.datastore:datastore-preferences:1.0.0")
 
     ksp("androidx.room:room-compiler:2.6.1")
     ksp("com.google.dagger:hilt-android-compiler:2.50")

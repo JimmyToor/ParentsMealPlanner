@@ -1,34 +1,63 @@
 package com.jimmy.parentsmealplanner.data
 
 import com.jimmy.parentsmealplanner.model.Dish
+import com.jimmy.parentsmealplanner.model.Instance
 import com.jimmy.parentsmealplanner.model.Meal
+import com.jimmy.parentsmealplanner.model.MealInstance
 import com.jimmy.parentsmealplanner.model.MealWithDishes
+import com.jimmy.parentsmealplanner.model.MealWithDishesAndAllInstances
+import com.jimmy.parentsmealplanner.ui.shared.UserDetails
 import kotlinx.coroutines.flow.Flow
 import kotlinx.datetime.LocalDate
 
 interface MealRepository {
     fun getMealsInDateRangeStream(dateStart: LocalDate, dateEnd: LocalDate): Flow<List<Meal>>
 
-    fun getMealStream(id: Int): Flow<Meal?>
+    fun getMealStream(id: Long): Flow<Meal?>
 
-    suspend fun getMealWithDishes(id: Int): MealWithDishes?
+    suspend fun getMealWithDishes(id: Long): MealWithDishes?
 
-    fun getMealsWithDishesInDateRangeStream(dateStart: LocalDate, dateEnd: LocalDate):
-        Flow<List<MealWithDishes>>
+    suspend fun getMealWithDishesAndInstance(instanceId: Long): Instance?
 
-    fun getMealWithDishesStream(id: Int): Flow<MealWithDishes?>
+    fun getInstanceInDateRangeStream(dateStart: LocalDate, dateEnd: LocalDate):
+        Flow<List<Instance>>
 
-    suspend fun insertMeal(meal: Meal)
+    fun getMealsWithDishesAndInstancesInDateRangeStream(dateStart: LocalDate, dateEnd: LocalDate):
+        Flow<List<MealWithDishesAndAllInstances>>
 
-    suspend fun insertMealWithDishes(mealWithDishes: MealWithDishes)
+    fun getMealWithDishesStream(id: Long): Flow<MealWithDishes?>
 
-    suspend fun upsertMealWithDishes(mealWithDishes: MealWithDishes)
+    suspend fun insertMeal(meal: Meal): Long
+
+    suspend fun insertMealWithDishes(mealWithDishes: MealWithDishes): MealWithDishes
+
+    suspend fun updateMealWithDishes(mealWithDishes: MealWithDishes): MealWithDishes
+
+    suspend fun upsertInstance(instance: Instance): Instance
+
+    suspend fun insertMealInstance(mealInstance: MealInstance): Long
+
+    suspend fun updateMealInstance(mealInstance: MealInstance)
+
+    suspend fun upsertMealInstance(mealInstance: MealInstance): Long
+
+    suspend fun deleteMealInstance(instanceId: Long)
 
     suspend fun deleteMeal(meal: Meal)
 
     suspend fun updateMeal(meal: Meal)
 
-    fun searchForMeals(searchTerm: String): Flow<List<Meal>>
+    suspend fun deleteDishesInNoMeal(dishes: List<Dish>)
 
-    suspend fun deleteDishesFromMeal(mealId: Int, dishes: List<Dish>)
+    fun searchForMeal(searchTerm: String): Flow<List<Meal>>
+
+    fun searchForDish(searchTerm: String): Flow<List<Dish>>
+
+    suspend fun deleteDishesFromMeal(mealId: Long, dishes: List<Dish>)
+
+    suspend fun getUserDetails(id: Long): UserDetails?
+
+    suspend fun insertUser(user: UserDetails): Long
+
+    suspend fun updateUserName(id: Long, name: String)
 }

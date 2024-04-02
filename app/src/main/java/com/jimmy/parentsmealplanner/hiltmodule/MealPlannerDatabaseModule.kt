@@ -38,6 +38,16 @@ class MealPlannerDatabaseModule {
     }
 
     @Provides
+    fun provideMealInstanceDao(appDatabase: MealPlannerDatabase): com.jimmy.parentsmealplanner.model.MealInstanceDao {
+        return appDatabase.mealInstanceDao()
+    }
+
+    @Provides
+    fun providePlannerUserDao(appDatabase: MealPlannerDatabase): com.jimmy.parentsmealplanner.model.UserDao {
+        return appDatabase.plannerUserDao()
+    }
+
+    @Provides
     fun provideMealDetails(): MealDetails {
         return MealDetails()
     }

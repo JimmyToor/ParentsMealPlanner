@@ -23,6 +23,9 @@ interface DishInMealDao {
     @Query("SELECT * FROM dishes_in_meals WHERE dishId = :dishId AND mealId = :mealId")
     suspend fun getDishInMeal(dishId: Int, mealId: Int): DishInMeal?
 
+    @Query("SELECT * from dishes_in_meals WHERE dishId IN (:dishIds)")
+    suspend fun getDishesInMeals(dishIds: List<Long>): List<DishInMeal>
+
     @Query("SELECT * FROM dishes_in_meals")
     suspend fun getAllDishesInMeals(): List<DishInMeal>
 }

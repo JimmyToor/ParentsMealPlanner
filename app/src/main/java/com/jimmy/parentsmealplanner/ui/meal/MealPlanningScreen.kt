@@ -22,7 +22,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -36,10 +35,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jimmy.parentsmealplanner.R
 import com.jimmy.parentsmealplanner.ui.nav.NavigationDestination
 import com.jimmy.parentsmealplanner.ui.shared.DishDetails
 import com.jimmy.parentsmealplanner.ui.shared.MealDetails
+import com.jimmy.parentsmealplanner.ui.shared.MealInstanceDetails
 import com.jimmy.parentsmealplanner.ui.shared.Occasion
 import com.jimmy.parentsmealplanner.ui.shared.Rating
 import com.jimmy.parentsmealplanner.ui.shared.TopBar
@@ -54,13 +55,15 @@ object MealPlanningDest : NavigationDestination {
 @Composable
 fun MealPlanner(
     modifier: Modifier = Modifier,
-    navigateToMealDetail: (Int?, LocalDate, Occasion) -> Unit = { _, _, _ -> },
+    navigateToMealDetail:
+        (mealId: Long, date: LocalDate, occasion: Occasion, userId: Long, instanceId: Long)
+            -> Unit = { _, _, _, _, _ -> },
     viewModel: MealPlanningViewModel = hiltViewModel(),
 ) {
-    val mealUiState by viewModel.mealUiState.collectAsState()
-    val dateUiState by viewModel.dateUiState.collectAsState()
+    val mealUiState by viewModel.mealUiState.collectAsStateWithLifecycle()
+    val dateUiState by viewModel.dateUiState.collectAsStateWithLifecycle()
+    val userUiState = viewModel.userUiState
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
-
 
     Scaffold(
         modifier = modifier,
@@ -75,12 +78,17 @@ fun MealPlanner(
         Column(modifier = Modifier
             .padding(paddingValues = it)
         ) {
-            WeekBar(dateUiState = dateUiState)
+            WeekBar(
+                dateUiState = dateUiState,
+                onDayClick = viewModel::updateSelectedDay,
+            )
             MealPlanningBody(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
-                onMealClick = navigateToMealDetail,
                 mealUiState = mealUiState,
+                userUiState = userUiState,
                 dateUiState = dateUiState,
+                onMealClick = navigateToMealDetail,
+                onDeleteClick = viewModel::deleteInstance,
             )
         }
     }
@@ -92,10 +100,13 @@ fun MealPlanner(
 fun WeekBar(
     modifier: Modifier = Modifier,
     dateUiState: DateUiState = DateUiState(),
+    onDayClick: (LocalDate) -> Unit = { _ -> }
 ) {
     LazyRow(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
         items(dateUiState.daysOfSelectedWeek) { day ->
-            Column {
+            Column (modifier = Modifier
+                .clickable { onDayClick(day) }
+            ){
                 Text(
                     text = day.dayOfWeek.toString().substring(0..2),
                     modifier = Modifier.padding(horizontal = 12.dp),
@@ -118,7 +129,10 @@ fun MealPlanningBody(
     modifier: Modifier = Modifier,
     mealUiState: MealUiState = MealUiState(),
     dateUiState: DateUiState = DateUiState(),
-    onMealClick: (Int?, LocalDate, Occasion) -> Unit = { _: Int?, _: LocalDate, _: Occasion -> },
+    onMealClick: (mealId: Long, date: LocalDate, occasion: Occasion, userId: Long, instanceId: Long)
+        -> Unit = { _, _, _, _, _ -> },
+    userUiState: UserUiState = UserUiState(),
+    onDeleteClick: (Long) -> Unit = { _ -> }
 ) {
     Column (
         modifier = modifier.fillMaxWidth()
@@ -126,8 +140,13 @@ fun MealPlanningBody(
         dateUiState.daysOfSelectedWeek.forEach { day ->
             DayOfTheWeek(
                 date = day,
-                meals = mealUiState.getMealsForDate(date = day),
-                onMealClick = onMealClick
+                mealInstances = mealUiState.getMealInstancesForDateAndUser(
+                    date = day,
+                    userId = userUiState.userDetails.id
+                ),
+                onMealClick = onMealClick,
+                userId = userUiState.userDetails.id,
+                onDeleteClick = onDeleteClick,
             )
         }
     }
@@ -139,17 +158,30 @@ fun MealPlanningBody(
 fun DayOfTheWeek(
     modifier: Modifier = Modifier,
     date: LocalDate = LocalDate(1, 1, 1),
-    meals: List<MealDetails> = listOf(
-        MealDetails(name = "Breakfast meal"),
-        MealDetails(name = "Breakfast meal 2"),
-        MealDetails(occasion = Occasion.DINNER, name = "Dinner meal")
+    mealInstances: List<MealInstanceDetails> = listOf(
+        MealInstanceDetails(mealDetails = MealDetails(name = "Breakfast meal")),
+        MealInstanceDetails(mealDetails = MealDetails(name = "Breakfast meal2")),
+        MealInstanceDetails(
+            occasion = Occasion.DINNER,
+            mealDetails = MealDetails(name = "Dinner meal")
+        )
     ),
-    onMealClick: (Int?, LocalDate, Occasion) -> Unit = { _: Int?, _: LocalDate, _: Occasion -> },
+    onMealClick: (mealId: Long, date: LocalDate, occasion: Occasion, userId: Long, instanceId: Long)
+    -> Unit = { _, _, _, _, _ -> },
+    userId: Long = 1,
+    onDeleteClick: (Long) -> Unit = { _ -> }
 ) {
     Column (modifier = modifier) {
         Text(text = String.format(stringResource(R.string.planner_date_entry),
             date.dayOfWeek.toString(), date.month.toString(), date.dayOfMonth.toString()))
-        DailyMeals(mealList = meals, onMealClick = onMealClick, date = date)
+        DailyMeals(
+            mealInstances = mealInstances,
+            onMealClick = onMealClick,
+            date = date,
+            occasion = Occasion.BREAKFAST,
+            userId = userId,
+            onDeleteClick = onDeleteClick
+        )
     }
 }
 
@@ -160,25 +192,34 @@ fun DayOfTheWeek(
 @Preview(apiLevel = 33)
 fun DailyMeals(
     modifier: Modifier = Modifier,
-    mealList: List<MealDetails> = listOf(
-        MealDetails(name = "Breakfast meal"),
-        MealDetails(name = "Breakfast meal 2"),
-        MealDetails(occasion = Occasion.DINNER, name = "Dinner meal")
+    mealInstances: List<MealInstanceDetails> = listOf(
+        MealInstanceDetails(mealDetails = MealDetails(name = "Breakfast meal")),
+        MealInstanceDetails(mealDetails = MealDetails(name = "Breakfast meal2")),
+        MealInstanceDetails(
+            occasion = Occasion.DINNER,
+            mealDetails = MealDetails(name = "Dinner meal")
+        )
     ),
-    onMealClick: (Int?, LocalDate, Occasion) -> Unit = { _: Int?, _: LocalDate, _: Occasion -> },
+    onMealClick: (mealId: Long, date: LocalDate, occasion: Occasion, userId: Long, instanceId: Long)
+        -> Unit = { _, _, _, _, _ -> },
     date: LocalDate = LocalDate(1, 1, 1),
+    occasion: Occasion = Occasion.BREAKFAST,
+    userId: Long = 1,
+    onDeleteClick: (Long) -> Unit = { _ -> }
 ){
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Occasion.entries.forEach { occasion ->
-            val mealsForOccasion = mealList.filter { it.occasion == occasion }
+            val mealsForOccasion = mealInstances.filter { it.occasion == occasion }
             OccasionMeals(
                 occasion = occasion,
                 mealsForOccasion = mealsForOccasion,
-                onMealClick = onMealClick,
-                date = date
+                onEditClick = onMealClick,
+                date = date,
+                userId = userId,
+                onDeleteClick = onDeleteClick,
             )
         }
     }
@@ -191,22 +232,48 @@ fun DailyMeals(
 @Preview(apiLevel = 33)
 fun OccasionMeals(
     modifier: Modifier = Modifier,
-    occasion: Occasion = Occasion.BREAKFAST,
     @DrawableRes icon: Int = R.drawable.food_icon,
-    mealsForOccasion: List<MealDetails> = listOf(
-        MealDetails(
-            name = "Breakfast meal", dishes = listOf(
-                DishDetails(name = "Dish 1"),
-                DishDetails(name = "Dish 2"),
-                DishDetails(name = "Dish 3"),
-            )
+    mealsForOccasion: List<MealInstanceDetails> = listOf(
+        MealInstanceDetails(
+            mealInstanceId = 1,
+            mealDetails = MealDetails(
+                mealId = 1,
+                name = "Breakfast meal", dishes = listOf(
+                    DishDetails(name = "Dish 1"),
+                    DishDetails(name = "Dish 2"),
+                    DishDetails(name = "Dish 3"),
+                )
+            ),
         ),
-        MealDetails(name = "Breakfast meal 2"),
-        MealDetails(name = "Breakfast meal 3")
+        MealInstanceDetails(
+            mealInstanceId = 2,
+            mealDetails = MealDetails(
+                mealId = 2,
+                name = "Breakfast meal 2", dishes = listOf(
+                    DishDetails(name = "Dish 1"),
+                    DishDetails(name = "Dish 2"),
+                    DishDetails(name = "Dish 3"),
+                )
+            ),
+        ),
+        MealInstanceDetails(
+            mealInstanceId = 3,
+            mealDetails = MealDetails(
+                mealId = 3,
+                name = "Breakfast meal 3", dishes = listOf(
+                    DishDetails(name = "Dish 1"),
+                    DishDetails(name = "Dish 2"),
+                    DishDetails(name = "Dish 3"),
+                )
+            ),
+        ),
     ),
-    onMealClick: (id: Int?, date: LocalDate, occasion: Occasion) -> Unit =
-        { _: Int?, _: LocalDate, _: Occasion -> },
+    onEditClick: (mealId: Long, date: LocalDate, occasion: Occasion, userId: Long, instanceId: Long)
+        -> Unit = { _, _, _, _, _ -> },
     date: LocalDate = LocalDate(1, 1, 1),
+    occasion: Occasion = Occasion.BREAKFAST,
+    userId: Long = 0,
+    onDeleteClick: (Long) -> Unit = { _ -> }
 ) {
     OutlinedCard (modifier = modifier){
         Column(
@@ -218,14 +285,16 @@ fun OccasionMeals(
                 Image(painter = painterResource(id = icon), contentDescription = null)
                 Column {
                     Text(text = occasion.name)
-                    mealsForOccasion.forEach { meal ->
+                    mealsForOccasion.forEach { mealInstanceDetails ->
                         MealHolder(
-                            meal = meal,
+                            mealInstance = mealInstanceDetails,
                             modifier = modifier.padding(1.dp),
-                            onMealClick = onMealClick,
+                            onEditClick = onEditClick,
+                            onDeleteClick = onDeleteClick,
                         )
                     }
-                    AddMealButton(onClick = { onMealClick(0, date, occasion) })
+                    AddMealButton(onClick = {
+                        onEditClick(0, date, occasion, userId, 0) })
                 }
             }
         }
@@ -239,13 +308,19 @@ fun OccasionMeals(
 @Preview(apiLevel = 33)
 fun MealHolder(
     modifier: Modifier = Modifier,
-    meal: MealDetails = MealDetails(
-        id = 0,
-        name = stringResource(id = R.string.meal_contents_placeholder),
+    mealInstance: MealInstanceDetails =
+        MealInstanceDetails(
+            mealInstanceId = 0,
+            MealDetails(
+                name = stringResource(id = R.string.meal_contents_placeholder),
+                rating = Rating.LIKEIT,
+            ),
         date = LocalDate(1, 1, 1),
-        occasion = Occasion.BREAKFAST, rating = Rating.LIKEIT,
+        occasion = Occasion.BREAKFAST,
     ),
-    onMealClick: (Int?, LocalDate, Occasion) -> Unit = { _: Int?, _: LocalDate, _: Occasion -> },
+    onEditClick: (mealId: Long, date: LocalDate, occasion: Occasion, userId: Long, instanceId: Long)
+        -> Unit = { _, _, _, _, _ -> },
+    onDeleteClick: (instanceId: Long) -> Unit = { _ -> },
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     val drawable: Painter = (when (expanded) {
@@ -255,25 +330,55 @@ fun MealHolder(
     Row(modifier = Modifier
         .background(Color.LightGray)
     ) {
-        MealText(modifier = Modifier.clickable { onMealClick(meal.id, meal.date, meal.occasion) },
-            mealName = meal.name
+        Image(
+            modifier = Modifier
+                .clickable {
+                    onDeleteClick(
+                        mealInstance.mealInstanceId
+                    )
+                }
+                .fillMaxSize(0.05f),
+            painter = painterResource(id = R.drawable.ic_delete),
+            contentDescription = "Edit meal",
         )
+        Column {
+            MealText(
+                modifier = Modifier.clickable {
+                    onEditClick(
+                        mealInstance.mealDetails.mealId, mealInstance.date, mealInstance.occasion,
+                        mealInstance.userId, mealInstance.mealInstanceId
+                    )
+                },
+                mealName = mealInstance.mealDetails.name
+            )
+        }
         Image(painter = drawable,
             contentDescription = "Button: Expand/Collapse meal list",
-            modifier = Modifier.
-            padding(start = 4.dp, top = 2.dp).
-            fillMaxSize(0.05f).
-            clickable { expanded = !expanded }
+            modifier = Modifier.padding(start = 4.dp, top = 2.dp).fillMaxSize(0.05f)
+                .clickable { expanded = !expanded }
         )
+        Column (modifier = Modifier
+            .padding(4.dp)
+            .fillMaxWidth()
+        ) {
+            Image(
+                modifier = Modifier
+                    .clickable {
+                        onEditClick(mealInstance.mealDetails.mealId,
+                            mealInstance.date,
+                            mealInstance.occasion,
+                            mealInstance.userId,
+                            mealInstance.mealInstanceId)
+                    }
+                    .align(Alignment.End),
+                painter = painterResource(id = R.drawable.ic_edit),
+                contentDescription = "Edit meal",
+            )
+        }
     }
     when {
         expanded -> {
-            /*LazyColumn(modifier = Modifier) {
-                items(items = meal.dishes ?: listOf()) { dish ->
-                    DishText(dishName = dish.name)
-                }
-            }*/
-            (meal.dishes ?: listOf()).forEach { dish ->
+            mealInstance.mealDetails.dishes.forEach { dish ->
                 DishText(dishName = dish.name)}
         }
     }

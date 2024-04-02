@@ -19,7 +19,9 @@ class AppDataContainer(private val context: Context) : AppContainer {
         LocalMealRepository(
             MealPlannerDatabase.getDatabase(context).mealDao(),
             MealPlannerDatabase.getDatabase(context).dishDao(),
-            MealPlannerDatabase.getDatabase(context).dishInMealDao()
-            )
+            MealPlannerDatabase.getDatabase(context).dishInMealDao(),
+            MealPlannerDatabase.getDatabase(context).mealInstanceDao(),
+            MealPlannerDatabase.getDatabase(context).plannerUserDao(),
+        )
     }
 }
