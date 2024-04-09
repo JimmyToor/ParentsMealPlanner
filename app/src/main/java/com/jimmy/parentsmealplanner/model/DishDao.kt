@@ -7,18 +7,25 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
+import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface DishDao {
-    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(dish: Dish): Long
 
-    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(dishes: List<Dish>): List<Long>
 
     @Update
     suspend fun update(dish: Dish)
+
+    @Upsert
+    suspend fun upsert(dish: Dish): Long
+
+    @Upsert
+    suspend fun upsertAll(dishes: List<Dish>): List<Long>
 
     @Delete
     suspend fun delete(dish: Dish)
@@ -39,6 +46,6 @@ interface DishDao {
     @Query("SELECT * FROM dishes WHERE dishId = :id")
     fun getDishWithMeals(id: Long): Flow<DishWithMeals>
 
-    @Query("SELECT * FROM dishes WHERE name LIKE :searchQuery")
-    fun searchForDish(searchQuery: String): Flow<List<Dish>>
+    @Query("SELECT * FROM dishes WHERE name LIKE '%' || :searchTerm || '%'")
+    fun searchForDish(searchTerm: String): Flow<List<Dish>>
 }

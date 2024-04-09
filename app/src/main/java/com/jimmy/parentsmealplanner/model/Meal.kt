@@ -10,6 +10,9 @@ import com.jimmy.parentsmealplanner.ui.shared.Occasion
 import com.jimmy.parentsmealplanner.ui.shared.Rating
 import kotlinx.datetime.LocalDate
 
+/**
+ * Meal entity and relevant POJOs for grouping related data together
+ */
 @Entity(tableName = "meals")
 data class Meal(
     @PrimaryKey(autoGenerate = true)
@@ -19,7 +22,7 @@ data class Meal(
     val imgSrc: String? = null,
 )
 
-data class Instance(
+data class MealWithDishesInstance(
     @Embedded
     var instanceDetails: InstanceDetails,
     @Embedded
@@ -61,9 +64,8 @@ data class MealWithDishesAndAllInstances(
         parentColumn = "mealId",
         entity = MealInstance::class,
         entityColumn = "mealId",
-        projection = ["mealInstanceId", "date", "occasion", "userId"],
     )
-    var mealInstanceDetailList: List<InstanceDetails>
+    var mealInstanceDetails: List<InstanceDetails>
 )
 
 /**
@@ -75,23 +77,23 @@ fun MealWithDishes.toDishesInMeal(): List<DishInMeal> =
     }
 
 /**
- * Converts an [Instance] to a list of [DishInMeal].
+ * Converts an [MealWithDishesInstance] to a list of [DishInMeal].
  */
-fun Instance.toDishesInMeal(): List<DishInMeal> =
+fun MealWithDishesInstance.toDishesInMeal(): List<DishInMeal> =
     mealWithDishes.dishes.map {
             dish -> DishInMeal(mealId = mealWithDishes.meal.mealId, dishId = dish.dishId)
     }
 
 /**
- * Converts a [Instance] to a [MealWithDishes]
+ * Converts a [MealWithDishesInstance] to a [MealWithDishes]
  */
-fun Instance.toMealWithDishes(): MealWithDishes =
+fun MealWithDishesInstance.toMealWithDishes(): MealWithDishes =
     MealWithDishes(meal = mealWithDishes.meal, dishes = mealWithDishes.dishes)
 
 /**
  * Converts a [MealWithDishesAndInstance] to a [MealInstance]
  */
-fun Instance.toMealInstance(): MealInstance =
+fun MealWithDishesInstance.toMealInstance(): MealInstance =
     MealInstance(
         mealInstanceId = instanceDetails.mealInstanceId,
         mealId = mealWithDishes.meal.mealId,

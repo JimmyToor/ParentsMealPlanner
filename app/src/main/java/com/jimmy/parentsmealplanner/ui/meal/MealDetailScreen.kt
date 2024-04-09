@@ -10,31 +10,44 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.DockedSearchBar
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -76,6 +89,39 @@ fun MealDetail(
     val mealDetailUiState = viewModel.mealDetailUiState
     val mealSearchResults by viewModel.filteredMealSearchResults.collectAsStateWithLifecycle()
     val dishSearchResults by viewModel.filteredDishSearchResults.collectAsStateWithLifecycle()
+    val showRenameMealDialog = rememberSaveable { mutableStateOf(false) }
+    val showRenameDishDialog = rememberSaveable { mutableStateOf(false) }
+    val targetDishIndex = rememberSaveable { mutableIntStateOf(0) }
+
+    when {
+        showRenameMealDialog.value -> {
+            RenameMealDialog(
+                onDismissRequest = { showRenameMealDialog.value = false },
+                onConfirmation = {
+                    showRenameMealDialog.value = false
+                    viewModel.updateMealName(newName = it)
+                },
+                name = mealDetailUiState.mealInstanceDetails.mealDetails.name,
+            )
+        }
+    }
+
+    when {
+        showRenameDishDialog.value -> {
+            RenameDishDialog(
+                onDismissRequest = { showRenameDishDialog.value = false },
+                onConfirmation = {
+                    showRenameDishDialog.value = false
+                    viewModel.updateDishName(
+                        index = targetDishIndex.intValue,
+                        newName = it,
+                    )
+                },
+                name = mealDetailUiState.mealInstanceDetails.mealDetails
+                    .dishes[targetDishIndex.intValue].name,
+            )
+        }
+    }
 
     Scaffold(
         modifier = modifier,
@@ -83,19 +129,20 @@ fun MealDetail(
             TopBar(
                 title = stringResource(id = R.string.app_name),
                 canNavigateBack = canNavigateBack,
-                )
+                navigateUp = onNavigateUp,
+            )
         },
         floatingActionButton = {
             SaveButton(
                 enabled = mealDetailUiState.isEntryValid,
                 onSaveClick = {
-                viewModel.viewModelScope.launch {
-                    withContext(Dispatchers.IO) {
-                        viewModel.saveMeal()
+                    viewModel.viewModelScope.launch {
+                        withContext(Dispatchers.IO) {
+                            viewModel.saveMeal()
+                        }
                     }
                     navigateBack()
-                }
-            })
+                })
         },
     ) { paddingValues ->
         Column(modifier = Modifier.padding(paddingValues = paddingValues)) {
@@ -105,17 +152,118 @@ fun MealDetail(
                     .verticalScroll(rememberScrollState())
                     .fillMaxWidth(),
                 mealDetailUiState = viewModel.mealDetailUiState,
-                onMealDetailsChange = { viewModel.updateUiState(mealDetails = it) },
+                onDishAdded = viewModel::addDish,
+                onDishesChanged = { viewModel.updateUiState(mealDetails = it) },
                 onMealInstanceDetailsChange = { viewModel.updateUiState(mealInstanceDetails = it) },
-                onDeleteDishClick = viewModel::markDishForDeletion,
+                onDeleteDishClick = viewModel::deleteDish,
                 onRestoreDishClick = viewModel::unMarkDishForDeletion,
-                onMealNameChanged = viewModel::updateMealName,
-                onDishNameChanged = viewModel::updateDishName,
+                onMealNameChanged = viewModel::changeMeal,
+                onDishValueChanged = viewModel::changeDish,
                 mealSearchResults = mealSearchResults,
                 dishSearchResults = dishSearchResults,
                 onFindExistingMeal = viewModel::findExistingMeal,
                 onFindExistingDish = viewModel::findExistingDish,
+                onMealSearchTermChanged = viewModel::onMealSearchTermChange,
+                onDishSearchTermChanged = viewModel::onDishSearchTermChange,
+                onMealEditClick = { showRenameMealDialog.value = true },
+                onDishEditClick = {
+                    targetDishIndex.intValue = it
+                    showRenameDishDialog.value = true
+                },
             )
+        }
+    }
+}
+
+@Composable
+@Preview
+fun RenameMealDialog(
+    onDismissRequest: () -> Unit = { },
+    onConfirmation: (String) -> Unit = { },
+    onNameChange: (String) -> Unit = {},
+    name: String = "Meal Name",
+) {
+    Dialog(
+        onDismissRequest = onDismissRequest,
+    ) {
+        RenameForm(
+            onDismissRequest = onDismissRequest,
+            onConfirmation = onConfirmation,
+            titleText = R.string.rename_meal,
+            initialName = name,
+        )
+    }
+}
+
+@Composable
+@Preview
+fun RenameDishDialog(
+    onDismissRequest: () -> Unit = { },
+    onConfirmation: (String) -> Unit = { },
+    onNameChange: (String) -> Unit = {},
+    name: String = "Dish Name",
+) {
+    Dialog(
+        onDismissRequest = onDismissRequest,
+    ) {
+        RenameForm(
+            onDismissRequest = onDismissRequest,
+            onConfirmation = onConfirmation,
+            titleText = R.string.rename_dish,
+            initialName = name
+        )
+    }
+}
+
+@Composable
+fun RenameForm(
+    onDismissRequest: () -> Unit,
+    onConfirmation: (String) -> Unit,
+    titleText: Int = R.string.rename,
+    initialName: String = "Default Name"
+) {
+    var name by rememberSaveable { mutableStateOf(initialName) }
+    Card(
+        modifier =
+        Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        shape = RoundedCornerShape(16.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(24.dp),
+        ) {
+            Text(
+                modifier =
+                    Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .padding(top = 12.dp),
+                style = MaterialTheme.typography.titleLarge,
+                text = stringResource(id = titleText),
+            )
+            TextField(
+                value = name,
+                onValueChange = {
+                    name = it
+                },
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                TextButton(
+                    onClick = onDismissRequest,
+                    modifier = Modifier.padding(8.dp),
+                ) {
+                    Text("Cancel")
+                }
+                TextButton(
+                    onClick = { onConfirmation(name) },
+                    modifier = Modifier.padding(8.dp),
+                ) {
+                    Text("Confirm")
+                }
+            }
         }
     }
 }
@@ -135,16 +283,21 @@ fun Header(
 fun MealDetailBody(
     modifier: Modifier = Modifier,
     mealDetailUiState: MealDetailUiState = MealDetailUiState(),
-    onMealDetailsChange: (MealDetails) -> Unit = {},
+    onDishesChanged: (MealDetails) -> Unit = {},
     onMealInstanceDetailsChange: (MealInstanceDetails) -> Unit = {},
     onMealNameChanged: (String) -> Unit = {},
-    onDishNameChanged: (Int, String) -> Unit = { _: Int, _: String -> },
+    onDishValueChanged: (Int, String) -> Unit = { _: Int, _: String -> },
     mealSearchResults: List<MealDetails> = listOf(),
     dishSearchResults: List<DishDetails> = listOf(),
-    onDeleteDishClick: (Int) -> Unit = {},
-    onRestoreDishClick: (Int) -> Unit = {},
+    onDeleteDishClick: (Int) -> Boolean = { _: Int -> true },
+    onRestoreDishClick: (DishDetails) -> Unit = {},
     onFindExistingMeal: (String) -> Unit = {},
     onFindExistingDish: (Int, String) -> Unit = { _: Int, _: String -> },
+    onDishAdded: (DishDetails) -> Unit = {},
+    onMealSearchTermChanged: (String) -> Unit = {},
+    onDishSearchTermChanged: (String) -> Unit = {},
+    onMealEditClick: () -> Unit = {},
+    onDishEditClick: (Int) -> Unit = {},
     ) {
     val mealInstanceDetails = mealDetailUiState.mealInstanceDetails
     Column(modifier = modifier) {
@@ -158,31 +311,39 @@ fun MealDetailBody(
                 modifier = Modifier,
                 mealDetails = mealInstanceDetails.mealDetails,
                 onNameChange = onMealNameChanged,
-                onFindExistingMeal = onFindExistingMeal,
+                onMealClick = onFindExistingMeal,
                 searchResults = mealSearchResults,
+                onSearchTermChanged = onMealSearchTermChanged,
+                onEditClick = onMealEditClick,
             )
             DishesFields(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(dimensionResource(id = R.dimen.padding_medium)),
-                onNameChange = onDishNameChanged,
+                onNameChange = onDishValueChanged,
                 mealDetails = mealInstanceDetails.mealDetails,
-                onDishAdded = onMealDetailsChange,
-                onFindExistingDish = onFindExistingDish,
+                onDishAdded = onDishAdded,
+                onDishClick = onFindExistingDish,
                 searchResults = dishSearchResults,
                 onDeleteDishClick = onDeleteDishClick,
-                onRestoreDishClick = onRestoreDishClick
+                onRestoreDishClick = onRestoreDishClick,
+                onDishSearchTermChanged = onDishSearchTermChanged,
+                onDishEditClick = onDishEditClick,
             )
             OccasionDropdown(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(dimensionResource(id = R.dimen.padding_medium)),
-                onOccasionChange = { onMealInstanceDetailsChange(mealInstanceDetails.copy(occasion = it))},
+                onOccasionChange = {
+                    onMealInstanceDetailsChange(mealInstanceDetails.copy(occasion = it))
+                },
                 selectedValue = mealInstanceDetails.occasion,
             )
             RatingSelector(
                 modifier = Modifier,
-                onRatingChange = { onMealDetailsChange(mealInstanceDetails.mealDetails.copy(rating = it))},
+                onRatingChange = {
+                    onDishesChanged(mealInstanceDetails.mealDetails.copy(rating = it))
+                },
                 rating = mealInstanceDetails.mealDetails.rating,
                 emojis = listOf(
                     RatingEmoji(emoji = "\uD83E\uDD14", description = "Learning to Love It",
@@ -214,7 +375,9 @@ fun MealField(
     mealDetails: MealDetails,
     onNameChange: (String) -> Unit = {},
     searchResults: List<MealDetails>,
-    onFindExistingMeal: (String) -> Unit,
+    onMealClick: (String) -> Unit,
+    onSearchTermChanged: (String) -> Unit,
+    onEditClick: () -> Unit = {},
 ) {
     var active by remember { mutableStateOf(false) }
 
@@ -225,6 +388,7 @@ fun MealField(
         query = mealDetails.name,
         onQueryChange = onNameChange,
         onSearch = {
+            onMealClick(mealDetails.name)
             active = false
         },
         placeholder = {
@@ -232,25 +396,40 @@ fun MealField(
                 true -> {
                     Text(text = stringResource(R.string.meal_name_req))
                 }
-
                 else -> {
                     Text(text = mealDetails.name)
                 }
             }
         },
-        trailingIcon = {},
+        trailingIcon = { if (mealDetails.mealId != 0L) {
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = stringResource(R.string.edit_meal),
+                    modifier = Modifier
+                        .clickable { onEditClick() }
+                        .padding(dimensionResource(id = R.dimen.padding_small))
+                )
+            }
+        },
         content = {
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(32.dp),
                 contentPadding = PaddingValues(16.dp),
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxSize(),
             ) {
                 items(
                     count = searchResults.size,
                     key = { index -> searchResults[index].mealId }
                 ) { index ->
                     val meal = searchResults[index]
-                    MealListItem(mealDetails = meal)
+                    MealListItem(
+                        onMealClick = {
+                            onMealClick(it)
+                            active = false
+                        },
+                        mealDetails = meal
+                    )
                 }
             }
         },
@@ -265,8 +444,8 @@ fun MealField(
         ),
         active = active,
         onActiveChange = {
-            active = !active
-            if (active) onFindExistingMeal(mealDetails.name)
+            if (active) onMealClick(mealDetails.name) else onSearchTermChanged(mealDetails.name)
+            active = it
         },
     )
 }
@@ -274,11 +453,14 @@ fun MealField(
 @Composable
 fun MealListItem(
     mealDetails: MealDetails,
+    onMealClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
         horizontalArrangement = Arrangement.SpaceBetween,
-        modifier = modifier.fillMaxWidth()
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable { onMealClick(mealDetails.name) },
     ) {
         Text(text = mealDetails.name)
         Text(text = mealDetails.rating.toString())
@@ -290,17 +472,19 @@ fun DishesFields(
     modifier: Modifier,
     mealDetails: MealDetails = MealDetails(),
     onNameChange: (Int, String) -> Unit,
-    onDishAdded: (MealDetails) -> Unit = {},
+    onDishAdded: (DishDetails) -> Unit = {},
     searchResults: List<DishDetails>,
-    onDeleteDishClick: (Int) -> Unit = {},
-    onRestoreDishClick: (Int) -> Unit = {},
-    onFindExistingDish: (Int, String) -> Unit,
+    onDeleteDishClick: (Int) -> Boolean = { _ -> false },
+    onRestoreDishClick: (DishDetails) -> Unit = {},
+    onDishClick: (Int, String) -> Unit,
+    onDishSearchTermChanged: (String) -> Unit,
+    onDishEditClick: (Int) -> Unit,
 ) {
     mealDetails.dishes.forEachIndexed { index, dish ->
         DishField(
             modifier = Modifier,
             onNameChange = { onNameChange(index, it) },
-            onFindExistingDish = { onFindExistingDish(index, it) },
+            onDishClick = { onDishClick(index, it) },
             dishDetails = dish,
             searchResults = searchResults,
             valid = !(
@@ -308,13 +492,17 @@ fun DishesFields(
                     .minus(dish)
                     .filterNot{ it.name.isBlank() }
                     .any { it.name == dish.name }
-            )
+            ),
+            onDeleteDishClick = { onDeleteDishClick(index) },
+            onRestoreDishClick = onRestoreDishClick,
+            onDishEditClick = { onDishEditClick(index) },
+            onDishSearchTermChanged = onDishSearchTermChanged,
         )
     }
     AddDishButton(
         modifier = modifier,
         onClick = {
-            onDishAdded(mealDetails.copy(dishes = mealDetails.dishes.plus(DishDetails(name = ""))))
+            onDishAdded(DishDetails(dishId = 0, name = "", rating = Rating.LIKEIT))
         },
     )
 }
@@ -332,24 +520,30 @@ fun AddDishButton(
     }
 }
 
+// TODO: Add dish name edit modal and use updateDishName
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DishField(
     modifier: Modifier = Modifier,
     onNameChange: (String) -> Unit,
-    onFindExistingDish: (String) -> Unit,
+    onDishEditClick: () -> Unit,
+    onDishClick: (String) -> Unit,
     dishDetails: DishDetails,
     valid: Boolean = true,
     searchResults: List<DishDetails>,
+    onDeleteDishClick: () -> Boolean = { false },
+    onRestoreDishClick: (DishDetails) -> Unit = {},
+    onDishSearchTermChanged: (String) -> Unit,
 ) {
     var active by remember { mutableStateOf(false) }
+    var deleted by remember { mutableStateOf(false) }
 
     DockedSearchBar(
         modifier = modifier
             .fillMaxWidth()
             .padding(dimensionResource(id = R.dimen.padding_medium)),
         query = dishDetails.name,
-        onQueryChange = onNameChange,
+        onQueryChange =  onNameChange,
         onSearch = {
             active = false
         },
@@ -363,7 +557,34 @@ fun DishField(
                 }
             }
         },
-        trailingIcon = {},
+        trailingIcon = {
+            if (dishDetails.dishId != 0L)
+                Icon(
+                    modifier = Modifier.clickable { onDishEditClick() },
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = "Edit name of dish " + dishDetails.name + " Button",
+                )
+        },
+        leadingIcon = {
+            Icon(
+                modifier = Modifier.clickable {
+                    deleted = when (deleted) {
+                        true -> {
+                            onRestoreDishClick(dishDetails)
+                            false
+                        }
+                        else -> {
+                            !onDeleteDishClick()
+                        }
+                    }
+                },
+                imageVector = when (deleted) {
+                    true -> ImageVector.vectorResource(id = R.drawable.baseline_undo_24)
+                    else -> Icons.Filled.Delete
+                },
+                contentDescription = "Delete dish " + dishDetails.name + " Button",
+            )
+        },
         content = {
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(32.dp),
@@ -375,10 +596,17 @@ fun DishField(
                     key = { index -> searchResults[index].dishId }
                 ) { index ->
                     val dish = searchResults[index]
-                    DishListItem(dishDetails = dish)
+                    DishListItem(
+                        onDishClick = {
+                            onDishClick(dish.name)
+                            active = false
+                        },
+                        dishDetails = dish,
+                    )
                 }
             }
         },
+        enabled = !deleted,
         colors = when (valid) {
             true -> SearchBarDefaults.colors(
                 containerColor = MaterialTheme.colorScheme.secondaryContainer,
@@ -401,20 +629,23 @@ fun DishField(
         },
         active = active,
         onActiveChange = {
-            active = !active
-            if (active) onFindExistingDish(dishDetails.name)
-        },
+            if (active) onDishClick(dishDetails.name) else onDishSearchTermChanged(dishDetails.name)
+            active = it
+        }
     )
 }
 
 @Composable
 fun DishListItem(
     dishDetails: DishDetails,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onDishClick: () -> Unit
 ) {
     Row(
         horizontalArrangement = Arrangement.SpaceBetween,
-        modifier = modifier.fillMaxWidth()
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable { onDishClick() }
     ) {
         Text(text = dishDetails.name)
         Text(text = dishDetails.rating.toString())

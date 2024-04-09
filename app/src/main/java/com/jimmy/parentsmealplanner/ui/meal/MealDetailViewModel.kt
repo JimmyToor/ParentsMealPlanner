@@ -8,14 +8,16 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.jimmy.parentsmealplanner.data.MealRepository
-import com.jimmy.parentsmealplanner.model.Instance
+import com.jimmy.parentsmealplanner.model.MealWithDishesInstance
 import com.jimmy.parentsmealplanner.ui.shared.DishDetails
 import com.jimmy.parentsmealplanner.ui.shared.MealDetails
 import com.jimmy.parentsmealplanner.ui.shared.MealInstanceDetails
 import com.jimmy.parentsmealplanner.ui.shared.Occasion
 import com.jimmy.parentsmealplanner.ui.shared.toDish
 import com.jimmy.parentsmealplanner.ui.shared.toDishDetails
+import com.jimmy.parentsmealplanner.ui.shared.toDishInMeal
 import com.jimmy.parentsmealplanner.ui.shared.toInstanceDetails
+import com.jimmy.parentsmealplanner.ui.shared.toMeal
 import com.jimmy.parentsmealplanner.ui.shared.toMealDetails
 import com.jimmy.parentsmealplanner.ui.shared.toMealInstanceDetails
 import com.jimmy.parentsmealplanner.ui.shared.toMealWithDishes
@@ -52,12 +54,13 @@ class MealDetailViewModel @Inject constructor(
 
     private var mealSearchChar by mutableStateOf("")
     private var dishSearchChar by mutableStateOf("")
+    private var mealSearchTerm by mutableStateOf("")
+    private var dishSearchTerm by mutableStateOf("")
+
+    private val savedDishes = mutableSetOf<DishDetails>()
+    private var dishesToDelete: Set<DishDetails> = setOf()
 
     var mealDetailUiState by mutableStateOf(MealDetailUiState())
-        private set
-    var mealSearchTerm by mutableStateOf("")
-        private set
-    var dishSearchTerm by mutableStateOf("")
         private set
 
     init {
@@ -80,6 +83,7 @@ class MealDetailViewModel @Inject constructor(
                     }
                     mealInstance?.let {
                         onMealSearchTermChange(it.mealDetails.name)
+                        savedDishes += it.mealDetails.dishes
                     }
 
                     MealDetailUiState(
@@ -103,9 +107,9 @@ class MealDetailViewModel @Inject constructor(
         snapshotFlow { mealSearchChar }
             .filterNotNull()
             .flatMapLatest { searchChar ->
-                mealRepository.searchForMeal(searchChar)
+                mealRepository.searchForMealWithDishes(searchChar)
             }
-            .map { searchResults -> searchResults.map { it.toMealDetails() } } // convert for
+            .map { searchResults -> searchResults.map { it.toMealDetails() } }
             .stateIn(
                 scope = viewModelScope,
                 initialValue = emptyList(),
@@ -133,7 +137,7 @@ class MealDetailViewModel @Inject constructor(
     // character changes rather than the entire search string
     @OptIn(ExperimentalCoroutinesApi::class)
     private val dishSearchResults: StateFlow<List<DishDetails>> =
-        snapshotFlow { mealSearchChar }
+        snapshotFlow { dishSearchChar }
             .filterNotNull()
             .flatMapLatest { searchChar ->
                 mealRepository.searchForDish(searchChar)
@@ -172,8 +176,9 @@ class MealDetailViewModel @Inject constructor(
             }
             false -> {
                 mealSearchTerm = newTerm
-                if (mealSearchTerm.first().toString() != mealSearchChar) {
-                    mealSearchChar = mealSearchTerm.first().toString()
+                val firstChar = mealSearchTerm.first().toString()
+                if (firstChar != mealSearchChar) {
+                    mealSearchChar = firstChar
                 }
             }
         }
@@ -202,101 +207,230 @@ class MealDetailViewModel @Inject constructor(
      */
     fun findExistingMeal(mealName: String) {
         val existingMeal = filteredMealSearchResults.value.find { it.name == mealName }
-        if (existingMeal != null && existingMeal != mealDetailUiState.mealInstanceDetails.mealDetails) {
-            updateUiState(mealDetails = existingMeal, dishesToDelete = emptyList())
+        val differentMeal = (existingMeal != mealDetailUiState.mealInstanceDetails.mealDetails)
+
+        if (existingMeal != null) {
+            if (differentMeal) {
+                updateUiState(
+                    mealDetails = existingMeal,
+                )
+                dishesToDelete = emptySet()
+                savedDishes += existingMeal.dishes
+            }
+        }
+        else {
+            updateUiState(
+                mealDetails = MealDetails(
+                    name = mealName,
+                    dishes = if (mealDetailUiState.mealInstanceDetails.mealDetails.mealId == 0L) {
+                        mealDetailUiState.mealInstanceDetails.mealDetails.dishes
+                    }
+                    else emptyList()
+                ),
+            )
+            dishesToDelete = emptySet()
+            savedDishes.clear()
         }
     }
 
-    fun updateMealName(newName: String) {
+    fun findExistingDish(index: Int, dishName: String) {
+        val existingDish = filteredDishSearchResults.value.find { it.name == dishName }
+        val differentDish = (existingDish != mealDetailUiState.mealInstanceDetails.mealDetails.dishes[index])
+        val updatedDishes = mealDetailUiState.mealInstanceDetails.mealDetails.dishes.toMutableList()
+
+        if (existingDish != null) {
+            if (differentDish) {
+                markDishForDeletion(updatedDishes[index])
+                updatedDishes[index] = existingDish
+                updateUiState(
+                    mealDetails = mealDetailUiState.mealInstanceDetails.mealDetails.copy(
+                        dishes = updatedDishes
+                    ),
+                )
+            }
+        }
+        else {
+            updateUiState(
+                mealDetails = mealDetailUiState.mealInstanceDetails.mealDetails.copy(
+                    dishes = updatedDishes,
+                ),
+            )
+        }
+    }
+
+    fun changeMeal(newName: String) {
         onMealSearchTermChange(newTerm = newName)
         updateUiState(
             mealDetails = mealDetailUiState.mealInstanceDetails.mealDetails.copy(name = newName)
         )
     }
 
-    fun updateDishName(index: Int, newName: String) {
+    fun changeDish(index: Int, newName: String) {
         val updatedDishes = mealDetailUiState.mealInstanceDetails.mealDetails.dishes.toMutableList()
-        updatedDishes[index] = updatedDishes[index].copy(name = newName)
-        onDishSearchTermChange(newTerm = newName)
-        updateUiState(mealDetailUiState.mealInstanceDetails.mealDetails.copy(dishes = updatedDishes))
-    }
+        val targetDish = updatedDishes[index]
 
-    fun findExistingDish(index: Int, dishName: String) {
-        val existingDish = filteredDishSearchResults.value.find { it.name == dishName }
-        if (existingDish != null) {
-            val updatedDishes = mealDetailUiState.mealInstanceDetails.mealDetails.dishes.toMutableList()
-            updatedDishes[index] = updatedDishes[index].copy(dishId = existingDish.dishId)
-            updateUiState(
-                mealDetailUiState.mealInstanceDetails.mealDetails.copy(dishes = updatedDishes)
-            )
+        if (mealDetailUiState.isEntryValid) {
+            markDishForDeletion(targetDish)
         }
-    }
 
-    fun markDishForDeletion(index: Int) {
-        updateUiState(
-            mealDetails = null,
-            dishesToDelete = mealDetailUiState.dishesToDelete
-                + mealDetailUiState.mealInstanceDetails.mealDetails.dishes[index]
-            )
-    }
+        updatedDishes[index] = targetDish.copy(
+            dishId = 0,
+            name = newName,
+        )
 
-    fun unMarkDishForDeletion(index: Int) {
+        onDishSearchTermChange(newTerm = newName)
         updateUiState(
-            mealDetails = null,
-            dishesToDelete = mealDetailUiState.dishesToDelete
-                - mealDetailUiState.mealInstanceDetails.mealDetails.dishes[index]
+            mealDetailUiState.mealInstanceDetails.mealDetails.copy(dishes = updatedDishes)
         )
     }
 
+    fun addDish(dishDetails: DishDetails) {
+        updateUiState(
+            mealDetails = mealDetailUiState.mealInstanceDetails.mealDetails.copy(
+                dishes = mealDetailUiState.mealInstanceDetails.mealDetails.dishes + dishDetails
+            )
+        )
+    }
+
+    fun updateDishName(index: Int, newName: String) {
+        val updatedDishes = mealDetailUiState.mealInstanceDetails.mealDetails.dishes.toMutableList()
+        updatedDishes[index] = updatedDishes[index].copy(
+            name = newName
+        )
+        viewModelScope.launch {
+            mealRepository.updateDish(updatedDishes[index].toDish())
+        }
+        updateUiState(
+            mealDetails = mealDetailUiState.mealInstanceDetails.mealDetails.copy(
+                dishes = updatedDishes
+            )
+        )
+    }
+
+    fun updateMealName(newName: String) {
+        updateUiState(
+            mealDetails = mealDetailUiState.mealInstanceDetails.mealDetails.copy(name = newName)
+        )
+        viewModelScope.launch {
+            mealRepository.updateMeal(mealDetailUiState.mealInstanceDetails.mealDetails.toMeal())
+        }
+    }
+
     /**
-     * Updates the UI state with new meal instance details and dishes to delete.
-     * If mealDetails or dishesToDelete are not provided or null, it retains the existing values.
+     * Deletes a dish from the meal.
+     *
+     * This function checks if the dish is saved as part of the meal in the database.
+     * If it is, the dish is marked for deletion and the function returns false.
+     * If the dish is not saved in the database, it is removed from the list immediately and the function returns true.
+     *
+     * @param index The index of the dish to be deleted.
+     * @return Boolean value indicating whether the dish was immediately removed (true) or marked for deletion (false).
+     */
+    fun deleteDish(index: Int): Boolean {
+        val targetDish = mealDetailUiState.mealInstanceDetails.mealDetails.dishes[index]
+
+        // If the dish is saved as part of the meal in the db, it needs to be marked for deletion
+        if (markDishForDeletion(targetDish)) {
+            return false
+        }
+        else { // otherwise it can just be removed from the list immediately
+            val updatedDishes =
+                mealDetailUiState.mealInstanceDetails.mealDetails.dishes.minus(
+                    targetDish
+                )
+
+            updateUiState(
+                mealDetails = mealDetailUiState.mealInstanceDetails.mealDetails.copy(
+                    dishes = updatedDishes,
+                ),
+            )
+            return true
+        }
+    }
+
+    /**
+     * Marks a dish for deletion if it is contained in the saved dishes.
+     *
+     * @param targetDish The dish to be marked for deletion.
+     * @return Boolean value indicating whether the dish was marked for deletion (true) or not (false).
+     */
+    private fun markDishForDeletion(targetDish: DishDetails): Boolean {
+        if (savedDishes.contains(targetDish)) {
+            dishesToDelete += targetDish
+            return true
+        }
+        return false
+    }
+
+    fun unMarkDishForDeletion(dishDetails: DishDetails) {
+        dishesToDelete -= dishDetails
+    }
+
+    /**
+     * Updates the UI state with new meal instance details.
+     * If any parameter is not provided or null, it retains the existing value.
      * Also validates the input.
      *
      * @param mealInstanceDetails The new meal instance details to update the UI with
-     * @param dishesToDelete The list of dish details to delete
      */
     fun updateUiState(
         mealInstanceDetails: MealInstanceDetails? = null,
-        dishesToDelete: List<DishDetails>? = null
     ) {
         val newMealInstance = mealInstanceDetails ?: mealDetailUiState.mealInstanceDetails
         mealDetailUiState =
             MealDetailUiState(
                 mealInstanceDetails = newMealInstance,
-                dishesToDelete = dishesToDelete ?: mealDetailUiState.dishesToDelete,
                 isEntryValid = validateInput(newMealInstance),
             )
     }
 
     /**
-     * Updates the UI state with new meal details and dishes to delete.
-     * If mealDetails or dishesToDelete are not provided or null, it retains the existing values.
+     * Updates the UI state with new meal details.
+     * If any parameter is not provided or null, it retains the existing value.
      * Also validates the input.
      *
      * @param mealDetails The new meal details to update the UI with
-     * @param dishesToDelete The list of dish details to delete
      */
-    fun updateUiState(mealDetails: MealDetails? = null, dishesToDelete: List<DishDetails>? = null) {
-        val newMealDetails = mealDetails ?: mealDetailUiState.mealInstanceDetails.mealDetails
-        val newMealInstance = mealDetailUiState.mealInstanceDetails.copy(mealDetails = newMealDetails)
+    fun updateUiState(
+        mealDetails: MealDetails? = null,
+    ) {
+        val newMealInstance = when (mealDetails != null) {
+             true -> {
+                mealDetailUiState.mealInstanceDetails.copy(
+                    mealDetails = mealDetails
+                )
+            }
+            false -> {
+                mealDetailUiState.mealInstanceDetails
+            }
+        }
+
         mealDetailUiState =
             MealDetailUiState(
                 mealInstanceDetails = newMealInstance,
-                dishesToDelete = dishesToDelete ?: mealDetailUiState.dishesToDelete,
                 isEntryValid = validateInput(newMealInstance),
             )
     }
 
     suspend fun saveMeal() {
         if (validateInput(mealDetailUiState.mealInstanceDetails)) {
-            if (mealDetailUiState.dishesToDelete.isNotEmpty()) {
-                mealRepository.deleteDishesFromMeal(
-                    mealId = mealId, dishes = mealDetailUiState.dishesToDelete.map { it.toDish() }
+            viewModelScope.launch {
+                if (dishesToDelete.isNotEmpty()) {
+                    mealRepository.deleteDishesFromMeal(
+                        dishesToDelete.map { it.toDishInMeal(
+                            mealId = mealDetailUiState.mealInstanceDetails.mealDetails.mealId
+                        ) }
+                    )
+                }
+                updateUiState(
+                    mealDetails = mealDetailUiState.mealInstanceDetails.mealDetails.apply {
+                        dishes.subtract(dishesToDelete)
+                    }
                 )
+                val updatedInstance =
+                    mealRepository.upsertMealWithDishesInstance(mealDetailUiState.toInstance())
+                updateUiState(mealInstanceDetails = updatedInstance.toMealInstanceDetails())
             }
-            val updatedInstance = mealRepository.upsertInstance(mealDetailUiState.toInstance())
-            updateUiState(mealInstanceDetails = updatedInstance.toMealInstanceDetails())
         }
     }
 
@@ -322,12 +456,11 @@ data class MealDetailUiState(
         date = Clock.System.now().toLocalDateTime(
         TimeZone.currentSystemDefault()
     ).date),
-    val dishesToDelete: List<DishDetails> = listOf(),
-    val isEntryValid: Boolean = false,
+    var isEntryValid: Boolean = false,
 )
 
-fun MealDetailUiState.toInstance(removeEmptyDishes: Boolean = true): Instance =
-    Instance(
+fun MealDetailUiState.toInstance(removeEmptyDishes: Boolean = true): MealWithDishesInstance =
+    MealWithDishesInstance(
         mealWithDishes =
             mealInstanceDetails.mealDetails.toMealWithDishes(removeEmptyDishes = removeEmptyDishes),
         instanceDetails = mealInstanceDetails.toInstanceDetails()

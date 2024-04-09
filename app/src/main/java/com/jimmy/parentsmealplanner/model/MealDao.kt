@@ -5,22 +5,29 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
-import androidx.room.RewriteQueriesToDropUnusedColumns
 import androidx.room.Transaction
 import androidx.room.Update
+import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 import kotlinx.datetime.LocalDate
 
 @Dao
 interface MealDao {
-    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    // TODO: add @Upsert to all daos
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(meal: Meal): Long
 
-    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(meals: List<Meal>): List<Long>
 
     @Update
-    suspend fun update(meal: Meal)
+    suspend fun update(meal: Meal): Int
+
+    @Upsert
+    suspend fun upsert(meal: Meal): Long
+
+    @Upsert
+    suspend fun upsertAll(meals: List<Meal>): List<Long>
 
     @Delete
     suspend fun delete(meal: Meal)
@@ -43,7 +50,7 @@ interface MealDao {
 
     @Transaction
     @Query("SELECT * FROM ViewMealsAndInstances WHERE mealInstanceId = :instanceId")
-    fun getMealWithDishesAndInstance(instanceId: Long): Instance?
+    fun getMealWithDishesAndInstance(instanceId: Long): MealWithDishesInstance?
 
     @Transaction
     @Query("SELECT * FROM ViewMeals WHERE mealId = :id")
@@ -57,19 +64,24 @@ interface MealDao {
     @Query("SELECT * FROM ViewMealsAndInstances " +
         "WHERE date >= :dateStart AND date <= :dateEnd ORDER BY date DESC"
     )
-    fun getMealsWithDishesAndInstancesInDateRangeStream(dateStart: LocalDate, dateEnd: LocalDate):
-        Flow<List<Instance>>
+    fun getInstancesInDateRangeStream(dateStart: LocalDate, dateEnd: LocalDate):
+        Flow<List<MealWithDishesInstance>>
 
     @Transaction
-    @RewriteQueriesToDropUnusedColumns
-    @Query("SELECT * FROM ViewMealsAndInstances " +
-        "WHERE date >= :dateStart AND date <= :dateEnd ORDER BY date DESC"
+    @Query("SELECT DISTINCT meals.* FROM meals WHERE " +
+        "mealId IN " +
+        "(SELECT mealId FROM meal_instances WHERE date BETWEEN :dateStart AND :dateEnd)"
     )
     fun getMealsWithDishesAndAllInstancesInDateRangeStream(dateStart: LocalDate, dateEnd: LocalDate)
         : Flow<List<MealWithDishesAndAllInstances>>
 
+    @Transaction
     @Query("SELECT * FROM ViewMeals WHERE name LIKE '%' || :searchTerm || '%'")
-    fun searchForMealStream(searchTerm: String?): Flow<List<Meal>>
+    fun searchForMealStream(searchTerm: String): Flow<List<Meal>>
+
+    @Transaction
+    @Query("SELECT * FROM ViewMeals WHERE name LIKE '%' || :searchTerm || '%'")
+    fun searchForMealWithDishesStream(searchTerm: String): Flow<List<MealWithDishes>>
 
     @Transaction
     @Query("SELECT * FROM ViewMeals " +

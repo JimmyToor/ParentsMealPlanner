@@ -1,11 +1,12 @@
 package com.jimmy.parentsmealplanner.ui.shared
 
 import com.jimmy.parentsmealplanner.model.Dish
-import com.jimmy.parentsmealplanner.model.Instance
+import com.jimmy.parentsmealplanner.model.DishInMeal
 import com.jimmy.parentsmealplanner.model.InstanceDetails
 import com.jimmy.parentsmealplanner.model.Meal
 import com.jimmy.parentsmealplanner.model.MealWithDishes
 import com.jimmy.parentsmealplanner.model.MealWithDishesAndAllInstances
+import com.jimmy.parentsmealplanner.model.MealWithDishesInstance
 import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -100,7 +101,7 @@ fun MealDetails.toMealWithDishes(removeEmptyDishes: Boolean = true): MealWithDis
  * Converts a [MealWithDishesAndAllInstances] to a list of [MealDetails] for each instance.
  */
 fun MealWithDishesAndAllInstances.toMealInstanceDetails(): List<MealInstanceDetails> =
-    mealInstanceDetailList.map { mealInstanceDetails ->
+    mealInstanceDetails.map { mealInstanceDetails ->
         MealInstanceDetails(
             mealInstanceId = mealInstanceDetails.mealInstanceId,
             mealDetails = MealDetails(
@@ -118,7 +119,7 @@ fun MealWithDishesAndAllInstances.toMealInstanceDetails(): List<MealInstanceDeta
 /**
  * Converts a [MealWithDishesAndInstance] to a [MealInstanceDetails]
  */
-fun Instance.toMealInstanceDetails(): MealInstanceDetails =
+fun MealWithDishesInstance.toMealInstanceDetails(): MealInstanceDetails =
     MealInstanceDetails(
         mealInstanceId = instanceDetails.mealInstanceId,
         mealDetails = mealWithDishes.toMealDetails(),
@@ -163,6 +164,15 @@ fun DishDetails.toDish(): Dish =
         dishId = dishId,
         name = name,
         rating = rating,
+    )
+
+/**
+ * Converts a [DishDetails] to a [DishInMeal].
+ */
+fun DishDetails.toDishInMeal(mealId: Long): DishInMeal =
+    DishInMeal(
+        mealId = mealId,
+        dishId = dishId,
     )
 
 /**

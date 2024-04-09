@@ -50,6 +50,7 @@ fun MealPlanningNavHost(
             MealDetail(
                 navigateBack = { navController.popBackStack() },
                 onNavigateUp = { navController.navigateUp() },
+                canNavigateBack = navController.previousBackStackEntry != null
             )
         }
     }
