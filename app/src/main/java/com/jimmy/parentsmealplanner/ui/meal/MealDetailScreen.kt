@@ -1,18 +1,25 @@
 package com.jimmy.parentsmealplanner.ui.meal
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AddCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Button
@@ -40,10 +47,19 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -51,6 +67,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.jimmy.parentsmealplanner.R
 import com.jimmy.parentsmealplanner.ui.nav.NavigationDestination
 import com.jimmy.parentsmealplanner.ui.shared.DishDetails
@@ -64,6 +82,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalDate
+
 
 object MealDetailDest : NavigationDestination {
     override val route = "meal_detail"
@@ -170,6 +189,7 @@ fun MealDetail(
                     targetDishIndex.intValue = it
                     showRenameDishDialog.value = true
                 },
+                onUpdateImage = viewModel::updateImage,
             )
         }
     }
@@ -235,9 +255,9 @@ fun RenameForm(
         ) {
             Text(
                 modifier =
-                    Modifier
-                        .align(Alignment.CenterHorizontally)
-                        .padding(top = 12.dp),
+                Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .padding(top = 12.dp),
                 style = MaterialTheme.typography.titleLarge,
                 text = stringResource(id = titleText),
             )
@@ -259,7 +279,8 @@ fun RenameForm(
                 }
                 TextButton(
                     onClick = { onConfirmation(name) },
-                    modifier = Modifier.padding(8.dp),
+                    modifier = Modifier
+                        .padding(8.dp)
                 ) {
                     Text("Confirm")
                 }
@@ -298,7 +319,8 @@ fun MealDetailBody(
     onDishSearchTermChanged: (String) -> Unit = {},
     onMealEditClick: () -> Unit = {},
     onDishEditClick: (Int) -> Unit = {},
-    ) {
+    onUpdateImage: (String) -> Unit = {},
+) {
     val mealInstanceDetails = mealDetailUiState.mealInstanceDetails
     Column(modifier = modifier) {
         Column(
@@ -340,17 +362,109 @@ fun MealDetailBody(
                 selectedValue = mealInstanceDetails.occasion,
             )
             RatingSelector(
-                modifier = Modifier,
+                modifier = Modifier
+                    .fillMaxWidth(),
                 onRatingChange = {
                     onDishesChanged(mealInstanceDetails.mealDetails.copy(rating = it))
                 },
                 rating = mealInstanceDetails.mealDetails.rating,
                 emojis = listOf(
-                    RatingEmoji(emoji = "\uD83E\uDD14", description = "Learning to Love It",
-                        Rating.LEARNING),
+                    RatingEmoji(
+                        emoji = "\uD83E\uDD14", description = "Learning to Love It",
+                        Rating.LEARNING
+                    ),
                     RatingEmoji(emoji = "\uD83D\uDE0A", description = "Like It", Rating.LIKEIT),
-                    RatingEmoji(emoji = "\uD83E\uDD70", description = "Love It", Rating.LOVEIT),)
+                    RatingEmoji(emoji = "\uD83E\uDD70", description = "Love It", Rating.LOVEIT),
+                )
             )
+            ImageField(
+                modifier = Modifier,
+                imageSrc = mealInstanceDetails.mealDetails.imgSrc,
+                onUpdateImage = onUpdateImage,
+            )
+        }
+    }
+}
+
+@Composable
+@Preview
+fun ImageField(
+    modifier: Modifier = Modifier,
+    imageSrc: String? = null,
+    onUpdateImage: (String) -> Unit = {},
+) {
+    val context = LocalContext.current
+    val pickImageContract = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()) { uri: Uri? ->
+            if (uri != null) {
+                onUpdateImage(uri.toString())
+            }
+    }
+
+    if (!imageSrc.isNullOrBlank()) {
+        Column(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(top = dimensionResource(id = R.dimen.padding_small)),
+        ){
+            Button(
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally),
+                onClick = { onUpdateImage("") },
+            ) {
+                Text(text = "Remove Image")
+            }
+        }
+        AsyncImage(
+            model = ImageRequest.Builder(context)
+                .data(imageSrc)
+                .crossfade(true)
+                .build(),
+            contentScale = ContentScale.Crop,
+            contentDescription = null,
+            modifier = modifier
+                .clip(
+                    RoundedCornerShape(
+                        corner = CornerSize(dimensionResource(id = R.dimen.padding_small))
+                    )
+                )
+                .fillMaxWidth()
+                .padding(dimensionResource(id = R.dimen.padding_medium))
+                .clickable { pickImageContract.launch("image/*") },
+        )
+    }
+    else {
+        Box(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(dimensionResource(id = R.dimen.padding_medium))
+                .height(200.dp)
+                .clickable { pickImageContract.launch("image/*") }
+                .drawBehind {
+                    drawRoundRect(
+                        color = Color.Gray,
+                        style = Stroke(
+                            width = 2f,
+                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
+                        ),
+                        cornerRadius = CornerRadius(8.dp.toPx()),
+                    )
+                },
+        )
+        {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(top = dimensionResource(id = R.dimen.padding_small)),
+            ) {
+                Text(text = stringResource(R.string.add_image))
+                Icon(
+                    imageVector = Icons.Filled.AddCircle,
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally),
+                    contentDescription = null,
+                )
+            }
         }
     }
 }
@@ -553,7 +667,10 @@ fun DishField(
                     Text(text = stringResource(R.string.dish_name_req))
                 }
                 else -> {
-                    Text(text = dishDetails.name)
+                    if (deleted) {
+                        Text(text = dishDetails.name, textDecoration = TextDecoration.LineThrough)
+                    }
+                    else Text(text = dishDetails.name,)
                 }
             }
         },
@@ -631,7 +748,7 @@ fun DishField(
         onActiveChange = {
             if (active) onDishClick(dishDetails.name) else onDishSearchTermChanged(dishDetails.name)
             active = it
-        }
+        },
     )
 }
 
@@ -661,7 +778,6 @@ fun RatingSelector(
 ) {
     Row(
         modifier = modifier
-            .fillMaxWidth()
             .padding(dimensionResource(id = R.dimen.padding_medium)),
         horizontalArrangement = Arrangement.spacedBy(dimensionResource(id = R.dimen.padding_small))
     ) {
@@ -684,10 +800,11 @@ fun RatingSelectorItem(
     selected: Boolean = false,
 ) {
     Row {
-        Column (modifier = Modifier
-            .padding(dimensionResource(id = R.dimen.padding_medium))
-            .align(Alignment.CenterVertically)
-            .clickable(onClick = onClick),
+        Column(
+            modifier = Modifier
+                .padding(dimensionResource(id = R.dimen.padding_medium))
+                .align(Alignment.CenterVertically)
+                .clickable(onClick = onClick),
             verticalArrangement = Arrangement.SpaceEvenly,
         ) {
             Text(text = emoji, modifier = Modifier.align(Alignment.CenterHorizontally),
@@ -750,7 +867,7 @@ fun OccasionDropdown(
     }
 }
 @Composable
-@Preview (showBackground = true)
+@Preview(showBackground = true)
 fun PreviewBody() {
     MealDetailBody()
 }

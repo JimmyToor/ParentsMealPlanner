@@ -109,6 +109,7 @@ fun MealWithDishesAndAllInstances.toMealInstanceDetails(): List<MealInstanceDeta
                 name = meal.name,
                 rating = meal.rating,
                 dishes = dishes.map { it.toDishDetails() },
+                imgSrc = meal.imgSrc,
             ),
             occasion = mealInstanceDetails.occasion,
             date = mealInstanceDetails.date,
@@ -137,6 +138,7 @@ fun MealWithDishes.toMealDetails(): MealDetails =
         name = meal.name,
         rating = meal.rating,
         dishes = dishes.map { it.toDishDetails() },
+        imgSrc = meal.imgSrc,
     )
 
 /**

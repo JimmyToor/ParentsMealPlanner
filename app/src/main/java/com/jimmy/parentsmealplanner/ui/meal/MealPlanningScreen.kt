@@ -5,14 +5,11 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -25,7 +22,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -61,6 +57,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jimmy.parentsmealplanner.R
 import com.jimmy.parentsmealplanner.ui.nav.NavigationDestination
 import com.jimmy.parentsmealplanner.ui.shared.DishDetails
+import com.jimmy.parentsmealplanner.ui.shared.IndeterminateCircularIndicator
 import com.jimmy.parentsmealplanner.ui.shared.MealDetails
 import com.jimmy.parentsmealplanner.ui.shared.MealInstanceDetails
 import com.jimmy.parentsmealplanner.ui.shared.Occasion
@@ -855,25 +852,5 @@ fun AddMealButton(
         shape = MaterialTheme.shapes.small,
     ) {
         Text(text = stringResource(id = R.string.add_meal_button_text))
-    }
-}
-
-@Preview
-@Composable
-fun IndeterminateCircularIndicator() {
-    Box(
-        modifier =
-        Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.3f)),
-    ) {
-        CircularProgressIndicator(
-            modifier =
-            Modifier
-                .width(64.dp)
-                .align(Alignment.Center),
-            color = MaterialTheme.colorScheme.secondary,
-            trackColor = MaterialTheme.colorScheme.surfaceVariant,
-        )
     }
 }

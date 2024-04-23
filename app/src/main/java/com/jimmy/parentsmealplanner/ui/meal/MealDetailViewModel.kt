@@ -316,6 +316,12 @@ class MealDetailViewModel @Inject constructor(
         }
     }
 
+    fun updateImage(imageSrc: String) {
+        updateUiState(
+            mealDetails = mealDetailUiState.mealInstanceDetails.mealDetails.copy(imgSrc = imageSrc)
+        )
+    }
+
     /**
      * Deletes a dish from the meal.
      *

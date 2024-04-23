@@ -25,6 +25,7 @@
     <string name="rename_dish">Rename Dish</string>
     <string name="rename_meal">Rename Meal</string>
     <string name="rename">Rename</string>
+    <string name="add_image">Add Image</string>
     <string-array name="meals_of_the_day">
         <item>@string/breakfast</item>
         <item>@string/lunch</item>
