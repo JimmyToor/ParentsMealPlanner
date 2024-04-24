@@ -373,14 +373,6 @@ fun MealDetailBody(
                     onDishesChanged(mealInstanceDetails.mealDetails.copy(rating = it))
                 },
                 rating = mealInstanceDetails.mealDetails.rating,
-                emojis = listOf(
-                    RatingEmoji(
-                        emoji = "\uD83E\uDD14", description = "Learning to Love It",
-                        Rating.LEARNING
-                    ),
-                    RatingEmoji(emoji = "\uD83D\uDE0A", description = "Like It", Rating.LIKEIT),
-                    RatingEmoji(emoji = "\uD83E\uDD70", description = "Love It", Rating.LOVEIT),
-                )
             )
             ImageField(
                 modifier = Modifier,
@@ -790,19 +782,17 @@ fun RatingSelector(
     modifier: Modifier,
     onRatingChange: (Rating) -> Unit,
     rating: Rating,
-    emojis: List<RatingEmoji> = listOf(),
 ) {
     Row(
         modifier = modifier
             .padding(dimensionResource(id = R.dimen.padding_medium)),
         horizontalArrangement = Arrangement.spacedBy(dimensionResource(id = R.dimen.padding_small))
     ) {
-        emojis.map { value ->
+        Rating.entries.map { value ->
             RatingSelectorItem(
-                onClick = { onRatingChange(value.rating) },
-                description = value.description,
-                emoji = value.emoji,
-                selected = value.rating == rating,
+                onClick = { onRatingChange(value) },
+                ratingEmoji = value.emoji,
+                selected = value == rating,
             )
         }
     }
@@ -811,8 +801,7 @@ fun RatingSelector(
 @Composable
 fun RatingSelectorItem(
     onClick: () -> Unit,
-    description: String,
-    emoji: String,
+    ratingEmoji: RatingEmoji,
     selected: Boolean = false,
 ) {
     Row {
@@ -823,14 +812,14 @@ fun RatingSelectorItem(
                 .clickable(onClick = onClick),
             verticalArrangement = Arrangement.SpaceEvenly,
         ) {
-            Text(text = emoji, modifier = Modifier.align(Alignment.CenterHorizontally),
+            Text(text = ratingEmoji.emoji, modifier = Modifier.align(Alignment.CenterHorizontally),
                 fontSize =
                 when (selected) {
                     true -> 18.sp
                     false -> 10.sp
                 }
             )
-            Text(text = description)
+            Text(text = ratingEmoji.description)
         }
     }
 }
