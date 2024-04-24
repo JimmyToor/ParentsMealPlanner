@@ -1,5 +1,6 @@
 package com.jimmy.parentsmealplanner.ui.meal
 
+import android.content.res.Configuration
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -58,6 +59,7 @@ import com.jimmy.parentsmealplanner.R
 import com.jimmy.parentsmealplanner.ui.nav.NavigationDestination
 import com.jimmy.parentsmealplanner.ui.shared.DishDetails
 import com.jimmy.parentsmealplanner.ui.shared.IndeterminateCircularIndicator
+import com.jimmy.parentsmealplanner.ui.shared.MainViewModel
 import com.jimmy.parentsmealplanner.ui.shared.MealDetails
 import com.jimmy.parentsmealplanner.ui.shared.MealInstanceDetails
 import com.jimmy.parentsmealplanner.ui.shared.Occasion
@@ -92,7 +94,8 @@ fun MealPlanner(
         userId: Long,
         instanceId: Long,
     ) -> Unit = { _, _, _, _, _ -> },
-    viewModel: MealPlanningViewModel = hiltViewModel(),
+    viewModel: MealPlanningViewModel = hiltViewModel<MealPlanningViewModel>(),
+    mainViewModel: MainViewModel = hiltViewModel<MainViewModel>(),
 ) {
     val mealUiState by viewModel.mealUiState.collectAsStateWithLifecycle()
     val dateUiState by viewModel.dateUiState.collectAsStateWithLifecycle()
@@ -131,6 +134,7 @@ fun MealPlanner(
                 title = stringResource(id = R.string.app_name),
                 canNavigateBack = false,
                 scrollBehavior = scrollBehavior,
+                onThemeToggle = { mainViewModel.changeTheme(it) },
             )
         },
     ) {
@@ -183,7 +187,14 @@ fun MealPlanner(
  * @param onUserDeleteClick A function that is called when the delete icon of a user is clicked in the dropdown menu.
  */
 @Composable
-@Preview
+@Preview(
+    uiMode = Configuration.UI_MODE_NIGHT_YES,
+    name = "DefaultPreviewDark"
+)
+@Preview(
+    uiMode = Configuration.UI_MODE_NIGHT_NO,
+    name = "DefaultPreviewLight"
+)
 fun UserBar(
     userUiState: UserUiState = UserUiState(),
     userValues: List<UserDetails> =
@@ -235,7 +246,14 @@ fun UserBar(
  * @param selectedValue The name of the currently selected user. This is displayed in the TextField.
  */
 @OptIn(ExperimentalMaterial3Api::class)
-@Preview
+@Preview(
+    uiMode = Configuration.UI_MODE_NIGHT_YES,
+    name = "DefaultPreviewDark"
+)
+@Preview(
+    uiMode = Configuration.UI_MODE_NIGHT_NO,
+    name = "DefaultPreviewLight"
+)
 @Composable
 fun UserDropdown(
     modifier: Modifier = Modifier,
@@ -456,7 +474,14 @@ fun WeekBar(
  * @param onMealDeleteClick A function that is called when the delete icon of a meal is clicked.
  */
 @Composable
-@Preview(apiLevel = 33)
+@Preview(apiLevel = 33,
+    uiMode = Configuration.UI_MODE_NIGHT_YES,
+    name = "DefaultPreviewDark"
+)
+@Preview(apiLevel = 33,
+    uiMode = Configuration.UI_MODE_NIGHT_NO,
+    name = "DefaultPreviewLight"
+)
 fun MealPlanningBody(
     modifier: Modifier = Modifier,
     mealUiState: MealUiState = MealUiState(),

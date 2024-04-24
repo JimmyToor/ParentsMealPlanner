@@ -13,7 +13,6 @@ import kotlinx.datetime.LocalDate
 
 @Dao
 interface MealDao {
-    // TODO: add @Upsert to all daos
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(meal: Meal): Long
 

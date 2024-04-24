@@ -1,5 +1,6 @@
 package com.jimmy.parentsmealplanner.ui.meal
 
+import android.content.res.Configuration
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -23,6 +24,7 @@ import androidx.compose.material.icons.filled.AddCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.DockedSearchBar
 import androidx.compose.material3.DropdownMenuItem
@@ -72,6 +74,7 @@ import coil.request.ImageRequest
 import com.jimmy.parentsmealplanner.R
 import com.jimmy.parentsmealplanner.ui.nav.NavigationDestination
 import com.jimmy.parentsmealplanner.ui.shared.DishDetails
+import com.jimmy.parentsmealplanner.ui.shared.MainViewModel
 import com.jimmy.parentsmealplanner.ui.shared.MealDetails
 import com.jimmy.parentsmealplanner.ui.shared.MealInstanceDetails
 import com.jimmy.parentsmealplanner.ui.shared.Occasion
@@ -104,7 +107,8 @@ fun MealDetail(
     onNavigateUp: () -> Unit = {},
     canNavigateBack: Boolean = true,
     viewModel: MealDetailViewModel = hiltViewModel(),
-) {
+    mainViewModel: MainViewModel = hiltViewModel<MainViewModel>(),
+    ) {
     val mealDetailUiState = viewModel.mealDetailUiState
     val mealSearchResults by viewModel.filteredMealSearchResults.collectAsStateWithLifecycle()
     val dishSearchResults by viewModel.filteredDishSearchResults.collectAsStateWithLifecycle()
@@ -149,6 +153,7 @@ fun MealDetail(
                 title = stringResource(id = R.string.app_name),
                 canNavigateBack = canNavigateBack,
                 navigateUp = onNavigateUp,
+                onThemeToggle = { mainViewModel.changeTheme(it) },
             )
         },
         floatingActionButton = {
@@ -470,13 +475,25 @@ fun ImageField(
 }
 
 @Composable
+@Preview(
+    uiMode = Configuration.UI_MODE_NIGHT_YES,
+    name = "DefaultPreviewDark"
+)
+@Preview(
+    uiMode = Configuration.UI_MODE_NIGHT_NO,
+    name = "DefaultPreviewLight"
+)
 fun SaveButton(
-    onSaveClick: () -> Unit,
-    enabled: Boolean = false,
+    onSaveClick: () -> Unit = {},
+    enabled: Boolean = true,
 ) {
     Button(
         onClick = onSaveClick,
-        enabled = enabled
+        enabled = enabled,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+        )
     ) {
         Text(stringResource(R.string.save))
     }
@@ -634,7 +651,6 @@ fun AddDishButton(
     }
 }
 
-// TODO: Add dish name edit modal and use updateDishName
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DishField(
@@ -670,7 +686,7 @@ fun DishField(
                     if (deleted) {
                         Text(text = dishDetails.name, textDecoration = TextDecoration.LineThrough)
                     }
-                    else Text(text = dishDetails.name,)
+                    else Text(text = dishDetails.name)
                 }
             }
         },
