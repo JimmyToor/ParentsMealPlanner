@@ -100,6 +100,20 @@ class MealPlanningViewModel @Inject constructor(
         _dateUiState.value = DateUiState(selectedDay = selectedDay)
     }
 
+    /**
+     * Increments the selected day in the dateUiState by the given number of days.
+     *
+     * This function increments the selected day in the [_dateUiState] by adding a specified number of days to it.
+     * The incremented selected day is then wrapped in a new [DateUiState] object and assigned back to [_dateUiState].
+     *
+     * @param days The number of days to add to the current selected day. Can be negative to subtract days.
+     */
+    fun incrementSelectedDay(days: Int) {
+        _dateUiState.value = DateUiState(
+            selectedDay = _dateUiState.value.selectedDay.plus(DatePeriod(days = days))
+        )
+    }
+
     fun updateUserUiState(
         selectedUserDetails: UserDetails = userUiState.value.selectedUserDetails,
         allUsersDetails: List<UserDetails> = userUiState.value.allUsersDetails,

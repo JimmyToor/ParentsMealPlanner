@@ -17,8 +17,7 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun IndeterminateCircularIndicator() {
     Box(
-        modifier =
-        Modifier
+        modifier = Modifier
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.3f)),
     ) {

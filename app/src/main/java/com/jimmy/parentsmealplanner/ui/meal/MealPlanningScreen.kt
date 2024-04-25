@@ -2,13 +2,24 @@ package com.jimmy.parentsmealplanner.ui.meal
 
 import android.content.res.Configuration
 import androidx.annotation.DrawableRes
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.AnchoredDraggableState
+import androidx.compose.foundation.gestures.DraggableAnchors
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.anchoredDraggable
+import androidx.compose.foundation.gestures.animateTo
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
@@ -17,6 +28,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
@@ -43,14 +56,20 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -58,6 +77,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jimmy.parentsmealplanner.R
 import com.jimmy.parentsmealplanner.ui.nav.NavigationDestination
 import com.jimmy.parentsmealplanner.ui.shared.DishDetails
+import com.jimmy.parentsmealplanner.ui.shared.DragAnchors
 import com.jimmy.parentsmealplanner.ui.shared.IndeterminateCircularIndicator
 import com.jimmy.parentsmealplanner.ui.shared.MainViewModel
 import com.jimmy.parentsmealplanner.ui.shared.MealDetails
@@ -66,7 +86,12 @@ import com.jimmy.parentsmealplanner.ui.shared.Occasion
 import com.jimmy.parentsmealplanner.ui.shared.Rating
 import com.jimmy.parentsmealplanner.ui.shared.TopBar
 import com.jimmy.parentsmealplanner.ui.shared.UserDetails
+import com.jimmy.parentsmealplanner.ui.theme.ParentsMealPlannerTheme
+import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
+import kotlin.math.roundToInt
 
 /**
  * Navigation destination for meal planning.
@@ -143,7 +168,7 @@ fun MealPlanner(
         ) {
             WeekBar(
                 dateUiState = dateUiState,
-                onDayClick = viewModel::updateSelectedDay,
+                onSwipe = viewModel::incrementSelectedDay,
             )
             UserBar(
                 userUiState = userUiState,
@@ -433,30 +458,138 @@ fun UserForm(
  *
  * @param modifier The Modifier to be applied to the WeekBar.
  * @param dateUiState The state of the date interface. This is used to get the days of the selected week.
- * @param onDayClick A function that is called when a day is clicked.
+ * @param onSwipe A function that is called when a day is clicked.
  */
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 @Preview(apiLevel = 33)
 fun WeekBar(
     modifier: Modifier = Modifier,
     dateUiState: DateUiState = DateUiState(),
-    onDayClick: (LocalDate) -> Unit = { _ -> },
+    onSwipe: (Int) -> Unit = { _ -> },
 ) {
-    LazyRow(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-        items(dateUiState.daysOfSelectedWeek) { day ->
-            Column(
-                modifier = Modifier.clickable { onDayClick(day) },
-            ) {
-                Text(
-                    text = day.dayOfWeek.toString().substring(0..2),
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                    style = MaterialTheme.typography.titleMedium,
+    val density = LocalDensity.current
+    val screenWidthDp = LocalConfiguration.current.screenWidthDp.dp
+    val screenWidthPx = with(density) { screenWidthDp.toPx() }
+    val currentDay = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+
+    val weekSwipeState = remember {
+        AnchoredDraggableState(
+            initialValue = DragAnchors.Middle,
+            positionalThreshold = { distance: Float -> distance * 0.5f },
+            velocityThreshold = { with(density) { 100.dp.toPx() } },
+            animationSpec = tween(),
+        )
+    }
+
+    LaunchedEffect(weekSwipeState.currentValue) {
+        snapshotFlow { weekSwipeState }.collect { state ->
+            if (state.currentValue == DragAnchors.Start) {
+                onSwipe(7)
+                state.animateTo(DragAnchors.Middle)
+            }
+            else if (state.currentValue == DragAnchors.End) {
+                onSwipe(-7)
+                state.animateTo(DragAnchors.Middle)
+            }
+        }
+    }
+
+    val alpha: Float by animateFloatAsState(
+        targetValue = if (weekSwipeState.targetValue != DragAnchors.Middle)
+                weekSwipeState.progress else 0f,
+        animationSpec = tween(
+            easing = LinearEasing
+        ), label = "Week Bar Arrow Alpha Animation"
+    )
+    val scaleY: Float by animateFloatAsState(
+        targetValue = weekSwipeState.progress,
+        animationSpec = tween(
+            easing = LinearEasing
+        ), label = "Week Bar Arrow Size Animation"
+    )
+
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth(),
+        contentAlignment = Alignment.Center) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (weekSwipeState.targetValue <= DragAnchors.Middle && !weekSwipeState.offset.isNaN()
+                && weekSwipeState.offset < 0) {
+                Icon(
+                    modifier = Modifier
+                        .graphicsLayer(alpha = alpha, scaleY = scaleY)
+                        .align(Alignment.CenterEnd),
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = "Arrow",
                 )
-                Text(
-                    text = day.dayOfMonth.toString(),
-                    modifier = Modifier.align(Alignment.CenterHorizontally),
-                    style = MaterialTheme.typography.titleLarge,
+            }
+            if (weekSwipeState.targetValue >= DragAnchors.Middle && !weekSwipeState.offset.isNaN()
+                && weekSwipeState.offset > 0) {
+                Icon(
+                    modifier = Modifier
+                        .graphicsLayer(alpha = alpha, scaleY = scaleY)
+                        .align(Alignment.CenterStart),
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Arrow",
                 )
+            }
+        }
+
+        LazyRow(
+            modifier = modifier
+                .fillMaxWidth()
+                .offset {
+                    IntOffset(x = weekSwipeState.requireOffset().roundToInt(), y = 0)
+                }
+                .onSizeChanged { size ->
+                    val dragEndPoint = size.width - screenWidthPx / 1.03f
+                    weekSwipeState.updateAnchors(
+                        DraggableAnchors {
+                            DragAnchors.entries
+                                .forEach { anchor ->
+                                    anchor at dragEndPoint * anchor.fraction
+                                }
+                        }
+                    )
+                },
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            items(dateUiState.daysOfSelectedWeek) { day ->
+                Column(
+                    modifier = Modifier
+                        .clickable { TODO("Day clicked scroll to day") }
+                        .let { modifier ->
+                            if (day == currentDay) {
+                                modifier.background(
+                                    shape = MaterialTheme.shapes.small,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            } else {
+                                modifier
+                            }
+                        }
+                        .anchoredDraggable(
+                            state = weekSwipeState,
+                            orientation = Orientation.Horizontal,
+                        ),
+                ) {
+                    Text(
+                        text = day.dayOfWeek.toString().substring(0..2),
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Text(
+                        text = day.dayOfMonth.toString(),
+                        modifier = Modifier.align(Alignment.CenterHorizontally),
+                        style = MaterialTheme.typography.titleLarge,
+                    )
+                }
             }
         }
     }
@@ -474,14 +607,7 @@ fun WeekBar(
  * @param onMealDeleteClick A function that is called when the delete icon of a meal is clicked.
  */
 @Composable
-@Preview(apiLevel = 33,
-    uiMode = Configuration.UI_MODE_NIGHT_YES,
-    name = "DefaultPreviewDark"
-)
-@Preview(apiLevel = 33,
-    uiMode = Configuration.UI_MODE_NIGHT_NO,
-    name = "DefaultPreviewLight"
-)
+
 fun MealPlanningBody(
     modifier: Modifier = Modifier,
     mealUiState: MealUiState = MealUiState(),
@@ -514,6 +640,27 @@ fun MealPlanningBody(
         }
     }
 }
+
+@Composable
+@Preview(apiLevel = 33,
+    name = "BodyPreviewDark"
+)
+fun MealPlanningBodyPreviewDark() {
+    ParentsMealPlannerTheme(darkTheme = true) {
+        MealPlanningBody()
+    }
+}
+
+@Composable
+@Preview(apiLevel = 33,
+    name = "BodyPreviewLight"
+)
+fun MealPlanningBodyPreviewLight() {
+    ParentsMealPlannerTheme(darkTheme = false) {
+        MealPlanningBody()
+    }
+}
+
 
 /**
  * The DayOfTheWeek displays the meals planned for a specific day.
