@@ -1,6 +1,5 @@
 package com.jimmy.parentsmealplanner.ui.meal
 
-import android.content.res.Configuration
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -467,14 +466,7 @@ fun ImageField(
 }
 
 @Composable
-@Preview(
-    uiMode = Configuration.UI_MODE_NIGHT_YES,
-    name = "DefaultPreviewDark"
-)
-@Preview(
-    uiMode = Configuration.UI_MODE_NIGHT_NO,
-    name = "DefaultPreviewLight"
-)
+@Preview
 fun SaveButton(
     onSaveClick: () -> Unit = {},
     enabled: Boolean = true,
