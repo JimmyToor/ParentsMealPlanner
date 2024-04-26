@@ -1,5 +1,6 @@
 package com.jimmy.parentsmealplanner.ui.shared
 
+import com.jimmy.parentsmealplanner.R
 import com.jimmy.parentsmealplanner.model.Dish
 import com.jimmy.parentsmealplanner.model.DishInMeal
 import com.jimmy.parentsmealplanner.model.InstanceDetails
@@ -34,11 +35,11 @@ data class DishDetails(
     val rating: Rating = Rating.LIKEIT,
 )
 
-enum class Occasion {
-    BREAKFAST,
-    LUNCH,
-    DINNER,
-    SNACK,
+enum class Occasion(val icon: Int) {
+    BREAKFAST(R.drawable.baseline_breakfast_dining_24),
+    LUNCH(R.drawable.baseline_lunch_dining_24),
+    DINNER(R.drawable.baseline_dinner_dining_24),
+    SNACK(R.drawable.outline_snack_24),
     ;
 
     companion object {

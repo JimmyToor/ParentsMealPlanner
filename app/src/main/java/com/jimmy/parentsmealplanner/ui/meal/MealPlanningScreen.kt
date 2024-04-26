@@ -1,6 +1,5 @@
 package com.jimmy.parentsmealplanner.ui.meal
 
-import androidx.annotation.DrawableRes
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -62,6 +61,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
@@ -88,6 +88,7 @@ import com.jimmy.parentsmealplanner.ui.shared.Occasion
 import com.jimmy.parentsmealplanner.ui.shared.Rating
 import com.jimmy.parentsmealplanner.ui.shared.TopBar
 import com.jimmy.parentsmealplanner.ui.shared.UserDetails
+import com.jimmy.parentsmealplanner.ui.theme.LocalDarkTheme
 import com.jimmy.parentsmealplanner.ui.theme.ParentsMealPlannerTheme
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
@@ -306,7 +307,11 @@ fun WeekBar(
             modifier = modifier
                 .fillMaxWidth()
                 .offset {
-                    IntOffset(x = weekSwipeState.requireOffset().roundToInt(), y = 0)
+                    IntOffset(
+                        x = weekSwipeState
+                            .requireOffset()
+                            .roundToInt(), y = 0
+                    )
                 }
                 .onSizeChanged { size ->
                     val dragEndPoint = size.width - screenWidthPx / 1.03f
@@ -821,7 +826,6 @@ fun OccasionMealsPreview() {
  * This composable function represents the meals for a specific occasion.
  *
  * @param modifier The Modifier to be applied to the OccasionMeals.
- * @param icon The Drawable resource ID for the icon to be displayed.
  * @param mealsForOccasion A list of MealInstanceDetails objects representing the meals for the occasion.
  * @param onEditClick A function that is called when a meal is clicked for editing. It takes the mealId, date, occasion, userId, and instanceId as parameters.
  * @param date The date of the meals. This is used to filter the meals.
@@ -832,7 +836,6 @@ fun OccasionMealsPreview() {
 @Composable
 fun OccasionMeals(
     modifier: Modifier = Modifier,
-    @DrawableRes icon: Int = R.drawable.food_icon,
     mealsForOccasion: List<MealInstanceDetails>,
     onEditClick: (
         mealId: Long,
@@ -853,7 +856,14 @@ fun OccasionMeals(
             horizontalAlignment = Alignment.Start,
         ) {
             Row(modifier = Modifier, verticalAlignment = Alignment.CenterVertically) {
-                Image(painter = painterResource(id = icon), contentDescription = null)
+                Image(
+                    painter = painterResource(id = occasion.icon),
+                    contentDescription = null,
+                    colorFilter = ColorFilter.tint(
+                        color = if (LocalDarkTheme.current) Color.White else Color.Black
+                    ),
+                    modifier = Modifier.size(48.dp)
+                )
                 Column {
                     Text(text = occasion.name)
                     mealsForOccasion.forEach { mealInstanceDetails ->
