@@ -925,7 +925,11 @@ fun MealHolder(
         }
     )
     Row(
-        modifier = Modifier.background(Color.LightGray),
+        modifier = Modifier
+            .background(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.background,
+            ),
     ) {
         Icon(
             modifier =
@@ -960,8 +964,8 @@ fun MealHolder(
         Image(
             modifier =
             Modifier
-                .padding(start = 4.dp, top = 2.dp)
-                .size(18.dp)
+                .padding(start = 2.dp, top = 2.dp)
+                .size(30.dp)
                 .clickable { expanded = !expanded }
                 .align(Alignment.CenterVertically),
             imageVector = imageVector,
@@ -1007,7 +1011,7 @@ fun MealText(
     modifier: Modifier = Modifier,
     mealName: String = stringResource(R.string.meal_contents_placeholder),
 ) {
-    Text(modifier = modifier, text = mealName)
+    Text(modifier = modifier, text = mealName, style = MaterialTheme.typography.titleMedium)
 }
 
 @Composable
@@ -1016,7 +1020,11 @@ fun DishText(
     modifier: Modifier = Modifier,
     dishName: String = stringResource(R.string.dish_name_placeholder),
 ) {
-    Text(text = dishName)
+    Text(
+        modifier = modifier.padding(vertical = 4.dp, horizontal = 16.dp),
+        text = "- $dishName",
+        style = MaterialTheme.typography.labelLarge,
+    )
 }
 
 @Composable

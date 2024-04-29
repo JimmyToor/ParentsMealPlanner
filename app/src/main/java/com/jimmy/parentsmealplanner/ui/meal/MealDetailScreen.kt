@@ -3,15 +3,20 @@ package com.jimmy.parentsmealplanner.ui.meal
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
@@ -31,25 +36,30 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
@@ -60,6 +70,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -83,7 +95,6 @@ import com.jimmy.parentsmealplanner.ui.shared.TopBar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.datetime.LocalDate
 
 
 object MealDetailDest : NavigationDestination {
@@ -102,7 +113,7 @@ object MealDetailDest : NavigationDestination {
 @Composable
 fun MealDetail(
     modifier: Modifier = Modifier,
-    navigateBack: () -> Unit = {},
+    navigateBack: () -> Unit = {}, //todo: Add confirmation prompt informing user of unsaved changes
     onNavigateUp: () -> Unit = {},
     canNavigateBack: Boolean = true,
     viewModel: MealDetailViewModel = hiltViewModel(),
@@ -149,7 +160,11 @@ fun MealDetail(
         modifier = modifier,
         topBar = {
             TopBar(
-                title = stringResource(id = R.string.app_name),
+                title = stringResource(
+                    id = R.string.meal_detail_header,
+                    mealDetailUiState.mealInstanceDetails.occasion,
+                    mealDetailUiState.mealInstanceDetails.date
+                ),
                 canNavigateBack = canNavigateBack,
                 navigateUp = onNavigateUp,
                 onThemeToggle = { mainViewModel.changeTheme(it) },
@@ -169,7 +184,6 @@ fun MealDetail(
         },
     ) { paddingValues ->
         Column(modifier = Modifier.padding(paddingValues = paddingValues)) {
-            Header(date = mealDetailUiState.mealInstanceDetails.date)
             MealDetailBody(
                 modifier = Modifier
                     .verticalScroll(rememberScrollState())
@@ -204,7 +218,6 @@ fun MealDetail(
 fun RenameMealDialog(
     onDismissRequest: () -> Unit = { },
     onConfirmation: (String) -> Unit = { },
-    onNameChange: (String) -> Unit = {},
     name: String = "Meal Name",
 ) {
     Dialog(
@@ -224,7 +237,6 @@ fun RenameMealDialog(
 fun RenameDishDialog(
     onDismissRequest: () -> Unit = { },
     onConfirmation: (String) -> Unit = { },
-    onNameChange: (String) -> Unit = {},
     name: String = "Dish Name",
 ) {
     Dialog(
@@ -290,17 +302,6 @@ fun RenameForm(
                 }
             }
         }
-    }
-}
-
-@Composable
-@Preview(apiLevel = 33)
-fun Header(
-    modifier: Modifier = Modifier,
-    date: LocalDate = LocalDate(2022, 1, 1),
-) {
-    Column(modifier = modifier) {
-        Text(text = date.toString())
     }
 }
 
@@ -483,85 +484,129 @@ fun SaveButton(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
+@Preview
 fun MealField(
     modifier: Modifier = Modifier,
-    mealDetails: MealDetails,
+    mealDetails: MealDetails = MealDetails(name = "mealName"),
     onNameChange: (String) -> Unit = {},
-    searchResults: List<MealDetails>,
-    onMealClick: (String) -> Unit,
-    onSearchTermChanged: (String) -> Unit,
+    searchResults: List<MealDetails> = emptyList(),
+    onMealClick: (String) -> Unit = {},
+    onSearchTermChanged: (String) -> Unit = {},
     onEditClick: () -> Unit = {},
 ) {
+    val keyboardVisibleState = rememberUpdatedState(WindowInsets.isImeVisible)
     var active by remember { mutableStateOf(false) }
+    val paddingId = R.dimen.padding_medium
+    val minHeight = 56.dp + (dimensionResource(id = paddingId)*2)
+    val defaultHeight = 56.dp
+    val targetHeight = when {
+        searchResults.isEmpty() || !active -> minHeight
+        else -> (minHeight.value + (searchResults.size * defaultHeight.value))
+            .coerceAtMost(448F).dp
+    }
+    val animatedHeight by animateDpAsState(
+        targetValue = targetHeight,
+        animationSpec = tween(durationMillis = 300), label = "Animated Meal Field Height"
+    )
 
-    DockedSearchBar(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(dimensionResource(id = R.dimen.padding_medium)),
-        query = mealDetails.name,
-        onQueryChange = onNameChange,
-        onSearch = {
-            onMealClick(mealDetails.name)
-            active = false
-        },
-        placeholder = {
-            when (mealDetails.name.isBlank()) {
-                true -> {
-                    Text(text = stringResource(R.string.meal_name_req))
+    // Reset the active state when the keyboard is closed
+    LaunchedEffect(key1 = keyboardVisibleState.value) {
+        if (!keyboardVisibleState.value) active = false
+    }
+
+    FieldHeader(modifier = modifier, string = stringResource(id = R.string.meal_header))
+
+    Box(modifier = Modifier
+        .height(animatedHeight)
+        .padding(vertical = dimensionResource(id = paddingId)),
+    ) {
+        DockedSearchBar(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(horizontal = dimensionResource(id = paddingId))
+                .onFocusChanged { focusState -> if (!focusState.isFocused) active = false },
+            query = mealDetails.name,
+            onQueryChange = onNameChange,
+            onSearch = {
+                onMealClick(mealDetails.name)
+                active = false
+            },
+            placeholder = {
+                when (mealDetails.name.isBlank()) {
+                    true -> {
+                        Text(text = stringResource(R.string.meal_name_req))
+                    }
+
+                    else -> {
+                        Text(text = mealDetails.name)
+                    }
                 }
-                else -> {
-                    Text(text = mealDetails.name)
-                }
-            }
-        },
-        trailingIcon = { if (mealDetails.mealId != 0L) {
-                Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = stringResource(R.string.edit_meal),
-                    modifier = Modifier
-                        .clickable { onEditClick() }
-                        .padding(dimensionResource(id = R.dimen.padding_small))
-                )
-            }
-        },
-        content = {
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(32.dp),
-                contentPadding = PaddingValues(16.dp),
-                modifier = Modifier
-                    .fillMaxSize(),
-            ) {
-                items(
-                    count = searchResults.size,
-                    key = { index -> searchResults[index].mealId }
-                ) { index ->
-                    val meal = searchResults[index]
-                    MealListItem(
-                        onMealClick = {
-                            onMealClick(it)
-                            active = false
-                        },
-                        mealDetails = meal
+            },
+            trailingIcon = {
+                if (mealDetails.mealId != 0L) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = stringResource(R.string.edit_meal),
+                        modifier = Modifier
+                            .clickable { onEditClick() }
+                            .padding(dimensionResource(id = R.dimen.padding_small))
                     )
                 }
-            }
-        },
-        colors = SearchBarDefaults.colors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-            dividerColor = MaterialTheme.colorScheme.secondaryContainer,
-            inputFieldColors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                unfocusedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                disabledContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+            },
+            content = {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(32.dp),
+                    contentPadding = PaddingValues(16.dp),
+                    modifier = Modifier
+                        .fillMaxSize(),
+                ) {
+                    items(
+                        count = searchResults.size,
+                        key = { index -> searchResults[index].mealId }
+                    ) { index ->
+                        val meal = searchResults[index]
+                        MealListItem(
+                            onMealClick = {
+                                onMealClick(it)
+                                active = false
+                            },
+                            mealDetails = meal
+                        )
+                    }
+                }
+            },
+            colors = SearchBarDefaults.colors(
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                dividerColor = MaterialTheme.colorScheme.secondaryContainer,
+                inputFieldColors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    disabledContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                ),
             ),
-        ),
-        active = active,
-        onActiveChange = {
-            if (active) onMealClick(mealDetails.name) else onSearchTermChanged(mealDetails.name)
-            active = it
-        },
+            active = active,
+            onActiveChange = {
+                if (active) onMealClick(mealDetails.name) else onSearchTermChanged(mealDetails.name)
+                active = it
+            },
+        )
+    }
+}
+
+@Composable
+fun FieldHeader(
+    modifier: Modifier = Modifier,
+    string: String = "Meal",
+) {
+    Text(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(top = dimensionResource(id = R.dimen.padding_medium)),
+        textAlign = TextAlign.Center,
+        text = string,
+        style = MaterialTheme.typography.titleLarge,
     )
 }
 
@@ -595,6 +640,8 @@ fun DishesFields(
     onDishSearchTermChanged: (String) -> Unit,
     onDishEditClick: (Int) -> Unit,
 ) {
+    FieldHeader(string = stringResource(id = R.string.dishes_header))
+
     mealDetails.dishes.forEachIndexed { index, dish ->
         DishField(
             modifier = Modifier,
@@ -635,121 +682,164 @@ fun AddDishButton(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
+@Preview
 fun DishField(
     modifier: Modifier = Modifier,
-    onNameChange: (String) -> Unit,
-    onDishEditClick: () -> Unit,
-    onDishClick: (String) -> Unit,
-    dishDetails: DishDetails,
+    onNameChange: (String) -> Unit = { _ -> },
+    onDishEditClick: () -> Unit = {},
+    onDishClick: (String) -> Unit = { _ -> },
+    dishDetails: DishDetails = DishDetails(1L, "Dish", Rating.LIKEIT),
     valid: Boolean = true,
-    searchResults: List<DishDetails>,
+    searchResults: List<DishDetails> = listOf(DishDetails(2L, "Dish", Rating.LIKEIT)),
     onDeleteDishClick: () -> Boolean = { false },
     onRestoreDishClick: (DishDetails) -> Unit = {},
-    onDishSearchTermChanged: (String) -> Unit,
+    onDishSearchTermChanged: (String) -> Unit = { _ -> },
 ) {
+    val keyboardVisibleState = rememberUpdatedState(WindowInsets.isImeVisible)
     var active by remember { mutableStateOf(false) }
     var deleted by remember { mutableStateOf(false) }
+    val horizontalPaddingId = R.dimen.padding_medium
+    val verticalPaddingId = R.dimen.padding_small
+    val minHeight = 56.dp + (dimensionResource(id = verticalPaddingId)*2)
+    val defaultHeight = 56.dp
+    val targetHeight = when {
+        searchResults.isEmpty() || !active -> minHeight
+        else -> (minHeight.value + (searchResults.size * defaultHeight.value))
+            .coerceAtMost(448F).dp
+    }
 
-    DockedSearchBar(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(dimensionResource(id = R.dimen.padding_medium)),
-        query = dishDetails.name,
-        onQueryChange =  onNameChange,
-        onSearch = {
-            active = false
-        },
-        placeholder = {
-            when (dishDetails.name.isBlank()) {
-                true -> {
-                    Text(text = stringResource(R.string.dish_name_req))
-                }
-                else -> {
-                    if (deleted) {
-                        Text(text = dishDetails.name, textDecoration = TextDecoration.LineThrough)
-                    }
-                    else Text(text = dishDetails.name)
-                }
-            }
-        },
-        trailingIcon = {
-            if (dishDetails.dishId != 0L)
-                Icon(
-                    modifier = Modifier.clickable { onDishEditClick() },
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = "Edit name of dish " + dishDetails.name + " Button",
-                )
-        },
-        leadingIcon = {
-            Icon(
-                modifier = Modifier.clickable {
-                    deleted = when (deleted) {
-                        true -> {
-                            onRestoreDishClick(dishDetails)
-                            false
-                        }
-                        else -> {
-                            !onDeleteDishClick()
-                        }
-                    }
-                },
-                imageVector = when (deleted) {
-                    true -> ImageVector.vectorResource(id = R.drawable.baseline_undo_24)
-                    else -> Icons.Filled.Delete
-                },
-                contentDescription = "Delete dish " + dishDetails.name + " Button",
-            )
-        },
-        content = {
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(32.dp),
-                contentPadding = PaddingValues(16.dp),
-                modifier = Modifier.fillMaxSize()
-            ) {
-                items(
-                    count = searchResults.size,
-                    key = { index -> searchResults[index].dishId }
-                ) { index ->
-                    val dish = searchResults[index]
-                    DishListItem(
-                        onDishClick = {
-                            onDishClick(dish.name)
-                            active = false
-                        },
-                        dishDetails = dish,
-                    )
-                }
-            }
-        },
-        enabled = !deleted,
-        colors = when (valid) {
-            true -> SearchBarDefaults.colors(
-                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                dividerColor = MaterialTheme.colorScheme.secondaryContainer,
-                inputFieldColors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    disabledContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                ),
-            )
-            else -> SearchBarDefaults.colors(
-                containerColor = MaterialTheme.colorScheme.errorContainer,
-                dividerColor = MaterialTheme.colorScheme.errorContainer,
-                inputFieldColors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.errorContainer,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.errorContainer,
-                    disabledContainerColor = MaterialTheme.colorScheme.errorContainer,
-                ),
-            )
-        },
-        active = active,
-        onActiveChange = {
-            if (active) onDishClick(dishDetails.name) else onDishSearchTermChanged(dishDetails.name)
-            active = it
-        },
+    val animatedHeight by animateDpAsState(
+        targetValue = targetHeight,
+        animationSpec = tween(durationMillis = 300), label = "Animated Dish Field Height"
     )
+
+    // Reset the active state when the keyboard is closed
+    LaunchedEffect(key1 = keyboardVisibleState.value) {
+        if (!keyboardVisibleState.value) active = false
+    }
+
+    ProvideTextStyle(
+        value = if (deleted)
+            TextStyle(textDecoration = TextDecoration.LineThrough)
+        else LocalTextStyle.current
+    ) {
+        Box(modifier = Modifier
+            .height(animatedHeight)
+            .padding(vertical = dimensionResource(id = verticalPaddingId)),
+        ) {
+            DockedSearchBar(
+                modifier = modifier
+                    .fillMaxSize()
+                    .padding(horizontal = dimensionResource(id = horizontalPaddingId))
+                    .onFocusChanged { focusState -> if (!focusState.isFocused) active = false },
+                query = dishDetails.name,
+                onQueryChange = onNameChange,
+                onSearch = {
+                    onDishClick(dishDetails.name)
+                    active = false
+                },
+                placeholder = {
+                    when (dishDetails.name.isBlank()) {
+                        true -> {
+                            Text(text = stringResource(R.string.dish_name_req))
+                        }
+
+                        else -> {
+                            if (deleted) {
+                                Text(
+                                    text = dishDetails.name,
+                                    textDecoration = TextDecoration.LineThrough
+                                )
+                            } else Text(text = dishDetails.name)
+                        }
+                    }
+                },
+                trailingIcon = {
+                    if (dishDetails.dishId != 0L)
+                        Icon(
+                            modifier = Modifier.clickable { onDishEditClick() },
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Edit name of dish " + dishDetails.name + " Button",
+                        )
+                },
+                leadingIcon = {
+                    Icon(
+                        modifier = Modifier.clickable {
+                            deleted = when (deleted) {
+                                true -> {
+                                    onRestoreDishClick(dishDetails)
+                                    false
+                                }
+
+                                else -> {
+                                    !onDeleteDishClick()
+                                }
+                            }
+                        },
+                        imageVector = when (deleted) {
+                            true -> ImageVector.vectorResource(id = R.drawable.baseline_undo_24)
+                            else -> Icons.Filled.Delete
+                        },
+                        contentDescription = "Delete dish " + dishDetails.name + " Button",
+                    )
+                },
+                content = {
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(32.dp),
+                        contentPadding = PaddingValues(16.dp),
+                        modifier = Modifier
+                            .fillMaxSize(),
+                    ) {
+                        items(
+                            count = searchResults.size,
+                            key = { index -> searchResults[index].dishId }
+                        ) { index ->
+                            val dish = searchResults[index]
+                            DishListItem(
+                                onDishClick = {
+                                    onDishClick(dish.name)
+                                    active = false
+                                },
+                                dishDetails = dish,
+                            )
+                        }
+                    }
+                },
+                enabled = !deleted,
+                colors = when (valid) {
+                    true -> SearchBarDefaults.colors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        dividerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        inputFieldColors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            disabledContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        ),
+                    )
+
+                    else -> SearchBarDefaults.colors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        dividerColor = MaterialTheme.colorScheme.errorContainer,
+                        inputFieldColors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = MaterialTheme.colorScheme.errorContainer,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.errorContainer,
+                            disabledContainerColor = MaterialTheme.colorScheme.errorContainer,
+                        ),
+                    )
+                },
+                active = active,
+                onActiveChange = {
+                    if
+                        (active) onDishClick(dishDetails.name)
+                    else
+                        onDishSearchTermChanged(dishDetails.name)
+                    active = it
+                },
+            )
+        }
+    }
 }
 
 @Composable
