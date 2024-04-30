@@ -34,6 +34,9 @@ interface MealDao {
     @Query("SELECT * FROM ViewMeals WHERE mealId = :id")
     suspend fun getMeal(id: Long): Meal?
 
+    @Query("SELECT * FROM ViewMeals WHERE name = :name")
+    suspend fun getMealByName(name: String): Meal?
+
     @Query("SELECT * FROM ViewMeals WHERE mealId = :id")
     fun getMealStream(id: Long): Flow<Meal>
 
@@ -90,4 +93,5 @@ interface MealDao {
     )
     fun getMealsInDateRangeStream(dateStart: LocalDate, dateEnd: LocalDate):
         Flow<List<Meal>>
+
 }

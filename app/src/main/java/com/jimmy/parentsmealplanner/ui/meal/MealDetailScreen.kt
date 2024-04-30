@@ -1,6 +1,8 @@
 package com.jimmy.parentsmealplanner.ui.meal
 
+import android.content.Context
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateDpAsState
@@ -27,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -48,6 +51,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -113,26 +117,59 @@ object MealDetailDest : NavigationDestination {
 @Composable
 fun MealDetail(
     modifier: Modifier = Modifier,
-    navigateBack: () -> Unit = {}, //todo: Add confirmation prompt informing user of unsaved changes
+    navigateBack: () -> Boolean = { true },
     onNavigateUp: () -> Unit = {},
     canNavigateBack: Boolean = true,
     viewModel: MealDetailViewModel = hiltViewModel(),
     mainViewModel: MainViewModel = hiltViewModel<MainViewModel>(),
-    ) {
+) {
     val mealDetailUiState = viewModel.mealDetailUiState
     val mealSearchResults by viewModel.filteredMealSearchResults.collectAsStateWithLifecycle()
     val dishSearchResults by viewModel.filteredDishSearchResults.collectAsStateWithLifecycle()
     val showRenameMealDialog = rememberSaveable { mutableStateOf(false) }
     val showRenameDishDialog = rememberSaveable { mutableStateOf(false) }
+    val showUnsavedChangesDialog = rememberSaveable { mutableStateOf(false) }
     val targetDishIndex = rememberSaveable { mutableIntStateOf(0) }
+    val context = LocalContext.current
+
+    // Show the dialog when the state variable is true
+    if (showUnsavedChangesDialog.value) {
+        AlertDialog(
+            onDismissRequest = { showUnsavedChangesDialog.value = false },
+            title = { Text("Discard Changes?") },
+            text = { Text("Any unsaved changes will be lost.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showUnsavedChangesDialog.value = false
+                    if (!canNavigateBack || !navigateBack()) onNavigateUp()
+                }) {
+                    Text("Yes")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showUnsavedChangesDialog.value = false }) {
+                    Text("No")
+                }
+            }
+        )
+    }
 
     when {
         showRenameMealDialog.value -> {
             RenameMealDialog(
                 onDismissRequest = { showRenameMealDialog.value = false },
                 onConfirmation = {
-                    showRenameMealDialog.value = false
-                    viewModel.updateMealName(newName = it)
+                    viewModel.viewModelScope.launch {
+                        val result = viewModel.updateMealName(
+                            newName = it,
+                        )
+                        checkResult(
+                            result,
+                            context,
+                            showRenameMealDialog,
+                            "A meal with that name already exists."
+                        )
+                    }
                 },
                 name = mealDetailUiState.mealInstanceDetails.mealDetails.name,
             )
@@ -144,11 +181,18 @@ fun MealDetail(
             RenameDishDialog(
                 onDismissRequest = { showRenameDishDialog.value = false },
                 onConfirmation = {
-                    showRenameDishDialog.value = false
-                    viewModel.updateDishName(
-                        index = targetDishIndex.intValue,
-                        newName = it,
-                    )
+                    viewModel.viewModelScope.launch {
+                        val result = viewModel.updateDishName(
+                            index = targetDishIndex.intValue,
+                            newName = it,
+                        )
+                        checkResult(
+                            result,
+                            context,
+                            showRenameDishDialog,
+                            "A dish with that name already exists."
+                        )
+                    }
                 },
                 name = mealDetailUiState.mealInstanceDetails.mealDetails
                     .dishes[targetDishIndex.intValue].name,
@@ -166,7 +210,9 @@ fun MealDetail(
                     mealDetailUiState.mealInstanceDetails.date
                 ),
                 canNavigateBack = canNavigateBack,
-                navigateUp = onNavigateUp,
+                navigateUp = {
+                    showUnsavedChangesDialog.value = true
+                },
                 onThemeToggle = { mainViewModel.changeTheme(it) },
             )
         },
@@ -179,7 +225,7 @@ fun MealDetail(
                             viewModel.saveMeal()
                         }
                     }
-                    navigateBack()
+                    if (!canNavigateBack || !navigateBack()) onNavigateUp()
                 })
         },
     ) { paddingValues ->
@@ -208,8 +254,26 @@ fun MealDetail(
                     showRenameDishDialog.value = true
                 },
                 onUpdateImage = viewModel::updateImage,
+                isDuplicateCheck = viewModel::isDuplicate,
             )
         }
+    }
+}
+
+private fun checkResult(
+    result: Boolean,
+    context: Context,
+    showRenameDishDialog: MutableState<Boolean>,
+    errorMessage: String,
+) {
+    if (!result) {
+        Toast.makeText(
+            context,
+            errorMessage,
+            Toast.LENGTH_SHORT
+        ).show()
+    } else {
+        showRenameDishDialog.value = false
     }
 }
 
@@ -325,6 +389,7 @@ fun MealDetailBody(
     onMealEditClick: () -> Unit = {},
     onDishEditClick: (Int) -> Unit = {},
     onUpdateImage: (String) -> Unit = {},
+    isDuplicateCheck: (Int) -> Boolean = { false },
 ) {
     val mealInstanceDetails = mealDetailUiState.mealInstanceDetails
     Column(modifier = modifier) {
@@ -356,6 +421,7 @@ fun MealDetailBody(
                 onRestoreDishClick = onRestoreDishClick,
                 onDishSearchTermChanged = onDishSearchTermChanged,
                 onDishEditClick = onDishEditClick,
+                isDuplicate = isDuplicateCheck,
             )
             OccasionDropdown(
                 modifier = Modifier
@@ -639,8 +705,11 @@ fun DishesFields(
     onDishClick: (Int, String) -> Unit,
     onDishSearchTermChanged: (String) -> Unit,
     onDishEditClick: (Int) -> Unit,
+    isDuplicate: (Int) -> Boolean = { _ -> true },
 ) {
-    FieldHeader(string = stringResource(id = R.string.dishes_header))
+    Row {
+        FieldHeader(string = stringResource(id = R.string.dishes_header))
+    }
 
     mealDetails.dishes.forEachIndexed { index, dish ->
         DishField(
@@ -649,12 +718,7 @@ fun DishesFields(
             onDishClick = { onDishClick(index, it) },
             dishDetails = dish,
             searchResults = searchResults,
-            valid = !(
-                mealDetails.dishes
-                    .minus(dish)
-                    .filterNot{ it.name.isBlank() }
-                    .any { it.name == dish.name }
-            ),
+            valid = !isDuplicate(index),
             onDeleteDishClick = { onDeleteDishClick(index) },
             onRestoreDishClick = onRestoreDishClick,
             onDishEditClick = { onDishEditClick(index) },
@@ -761,7 +825,7 @@ fun DishField(
                         Icon(
                             modifier = Modifier.clickable { onDishEditClick() },
                             imageVector = Icons.Default.Edit,
-                            contentDescription = "Edit name of dish " + dishDetails.name + " Button",
+                            contentDescription = "Edit name of dish $dishDetails.name Button",
                         )
                 },
                 leadingIcon = {
@@ -772,7 +836,6 @@ fun DishField(
                                     onRestoreDishClick(dishDetails)
                                     false
                                 }
-
                                 else -> {
                                     !onDeleteDishClick()
                                 }
@@ -855,7 +918,7 @@ fun DishListItem(
             .clickable { onDishClick() }
     ) {
         Text(text = dishDetails.name)
-        Text(text = dishDetails.rating.toString())
+        Text(text = dishDetails.rating.ratingEmoji.emojiString)
     }
 }
 
@@ -873,7 +936,7 @@ fun RatingSelector(
         Rating.entries.map { value ->
             RatingSelectorItem(
                 onClick = { onRatingChange(value) },
-                ratingEmoji = value.emoji,
+                ratingEmoji = value.ratingEmoji,
                 selected = value == rating,
             )
         }
@@ -894,9 +957,10 @@ fun RatingSelectorItem(
                 .clickable(onClick = onClick),
             verticalArrangement = Arrangement.SpaceEvenly,
         ) {
-            Text(text = ratingEmoji.emoji, modifier = Modifier.align(Alignment.CenterHorizontally),
-                fontSize =
-                when (selected) {
+            Text(text = ratingEmoji.emojiString,
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally),
+                fontSize = when (selected) {
                     true -> 18.sp
                     false -> 10.sp
                 }

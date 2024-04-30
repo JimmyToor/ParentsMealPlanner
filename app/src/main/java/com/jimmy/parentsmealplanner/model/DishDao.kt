@@ -36,6 +36,9 @@ interface DishDao {
     @Query("SELECT * from dishes WHERE dishId = :id")
     suspend fun getDish(id: Long): Dish?
 
+    @Query("SELECT * from dishes WHERE name = :name")
+    suspend fun getDishByName(name: String): Dish?
+
     @Query("SELECT * from dishes WHERE dishId = :id")
     fun getDishStream(id: Long): Flow<Dish>
 
@@ -44,7 +47,7 @@ interface DishDao {
 
     @Transaction
     @Query("SELECT * FROM dishes WHERE dishId = :id")
-    fun getDishWithMeals(id: Long): Flow<DishWithMeals>
+    fun getDishWithMealsStream(id: Long): Flow<DishWithMeals>
 
     @Query("SELECT * FROM dishes WHERE name LIKE '%' || :searchTerm || '%'")
     fun searchForDish(searchTerm: String): Flow<List<Dish>>

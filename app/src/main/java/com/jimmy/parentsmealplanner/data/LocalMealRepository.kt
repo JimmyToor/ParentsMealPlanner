@@ -140,9 +140,19 @@ class LocalMealRepository @Inject constructor(
 
     override suspend fun deleteMeal(meal: Meal) = mealDao.delete(meal)
 
-    override suspend fun updateMeal(meal: Meal) = mealDao.update(meal)
+    override suspend fun updateMeal(meal: Meal): Boolean{
+        return if (mealDao.getMealByName(meal.name) == null) {
+            mealDao.update(meal)
+            true
+        } else false
+    }
 
-    override suspend fun updateDish(dish: Dish) = dishDao.update(dish)
+    override suspend fun updateDish(dish: Dish): Boolean {
+        return if (dishDao.getDishByName(dish.name) == null) {
+            dishDao.update(dish)
+            true
+        } else false
+    }
 
     override suspend fun getUser(id: Long): User? = userDao.getUser(id)
 

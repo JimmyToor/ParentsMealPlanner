@@ -30,11 +30,11 @@ interface MealRepository {
 
     suspend fun insertMeal(meal: Meal): Long
 
-    suspend fun updateMeal(meal: Meal): Int
+    suspend fun updateMeal(meal: Meal): Boolean
 
     suspend fun deleteMeal(meal: Meal)
 
-    suspend fun updateDish(dish: Dish)
+    suspend fun updateDish(dish: Dish): Boolean
 
     suspend fun upsertMealWithDishes(mealWithDishes: MealWithDishes): MealWithDishes
 

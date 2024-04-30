@@ -24,8 +24,10 @@ interface DishInMealDao {
     @Delete
     suspend fun delete(dishInMeal: DishInMeal)
 
-    @Delete(entity = DishInMeal::class)
+    @Delete
     suspend fun deleteAll(dishesInMeal: List<DishInMeal>)
+
+
     @Query("SELECT * FROM dishes_in_meals WHERE dishId = :dishId AND mealId = :mealId")
     suspend fun getDishInMeal(dishId: Long, mealId: Long): DishInMeal?
 

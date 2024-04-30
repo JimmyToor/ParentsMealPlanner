@@ -1,6 +1,6 @@
 package com.jimmy.parentsmealplanner.ui.shared
 
 data class RatingEmoji(
-    val emoji: String,
+    val emojiString: String,
     val description: String,
 )
