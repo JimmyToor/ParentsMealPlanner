@@ -29,6 +29,9 @@
     <string name="meal_detail_header">%s, %s</string>
     <string name="meal_header">Meal Name</string>
     <string name="dishes_header">Dishes</string>
+    <string name="dishes_subheader_learning">Learning to Love It</string>
+    <string name="dishes_subheader_like">Like It</string>
+    <string name="dishes_subheader_love">Love It</string>
     <string-array name="meals_of_the_day">
         <item>@string/breakfast</item>
         <item>@string/lunch</item>

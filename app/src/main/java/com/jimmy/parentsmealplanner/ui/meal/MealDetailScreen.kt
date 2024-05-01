@@ -33,6 +33,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DockedSearchBar
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -260,6 +261,29 @@ fun MealDetail(
     }
 }
 
+@Composable
+@Preview
+fun FormatCheckBox(
+    modifier: Modifier = Modifier,
+    value: Boolean = false,
+    onCheck: (Boolean) -> Unit = {},
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            modifier = Modifier.padding(horizontal = 4.dp),
+            text = "Love/Like/Learn"
+        )
+        Checkbox(
+            modifier = Modifier.padding(0.dp),
+            checked = value,
+            onCheckedChange = onCheck
+        )
+    }
+}
+
 private fun checkResult(
     result: Boolean,
     context: Context,
@@ -392,60 +416,57 @@ fun MealDetailBody(
     isDuplicateCheck: (Int) -> Boolean = { false },
 ) {
     val mealInstanceDetails = mealDetailUiState.mealInstanceDetails
-    Column(modifier = modifier) {
-        Column(
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(
+            dimensionResource(id = R.dimen.padding_small)
+        )
+    ) {
+        MealField(
+            modifier = Modifier
+                .fillMaxWidth(),
+            mealDetails = mealInstanceDetails.mealDetails,
+            onNameChange = onMealNameChanged,
+            onMealClick = onFindExistingMeal,
+            searchResults = mealSearchResults,
+            onSearchTermChanged = onMealSearchTermChanged,
+            onEditClick = onMealEditClick,
+        )
+        DishesFields(
             modifier = Modifier,
-            verticalArrangement = Arrangement.spacedBy(
-                dimensionResource(id = R.dimen.padding_small)
-            )
-        ) {
-            MealField(
-                modifier = Modifier,
-                mealDetails = mealInstanceDetails.mealDetails,
-                onNameChange = onMealNameChanged,
-                onMealClick = onFindExistingMeal,
-                searchResults = mealSearchResults,
-                onSearchTermChanged = onMealSearchTermChanged,
-                onEditClick = onMealEditClick,
-            )
-            DishesFields(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(dimensionResource(id = R.dimen.padding_medium)),
-                onNameChange = onDishValueChanged,
-                mealDetails = mealInstanceDetails.mealDetails,
-                onDishAdded = onDishAdded,
-                onDishClick = onFindExistingDish,
-                searchResults = dishSearchResults,
-                onDeleteDishClick = onDeleteDishClick,
-                onRestoreDishClick = onRestoreDishClick,
-                onDishSearchTermChanged = onDishSearchTermChanged,
-                onDishEditClick = onDishEditClick,
-                isDuplicate = isDuplicateCheck,
-            )
-            OccasionDropdown(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(dimensionResource(id = R.dimen.padding_medium)),
-                onOccasionChange = {
-                    onMealInstanceDetailsChange(mealInstanceDetails.copy(occasion = it))
-                },
-                selectedValue = mealInstanceDetails.occasion,
-            )
-            RatingSelector(
-                modifier = Modifier
-                    .fillMaxWidth(),
-                onRatingChange = {
-                    onDishesChanged(mealInstanceDetails.mealDetails.copy(rating = it))
-                },
-                rating = mealInstanceDetails.mealDetails.rating,
-            )
-            ImageField(
-                modifier = Modifier,
-                imageSrc = mealInstanceDetails.mealDetails.imgSrc,
-                onUpdateImage = onUpdateImage,
-            )
-        }
+            onNameChange = onDishValueChanged,
+            mealDetails = mealInstanceDetails.mealDetails,
+            onDishAdded = onDishAdded,
+            onDishClick = onFindExistingDish,
+            searchResults = dishSearchResults,
+            onDeleteDishClick = onDeleteDishClick,
+            onRestoreDishClick = onRestoreDishClick,
+            onDishSearchTermChanged = onDishSearchTermChanged,
+            onDishEditClick = onDishEditClick,
+            isDuplicate = isDuplicateCheck,
+        )
+        OccasionDropdown(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(dimensionResource(id = R.dimen.padding_medium)),
+            onOccasionChange = {
+                onMealInstanceDetailsChange(mealInstanceDetails.copy(occasion = it))
+            },
+            selectedValue = mealInstanceDetails.occasion,
+        )
+        RatingSelector(
+            modifier = Modifier
+                .fillMaxWidth(),
+            onRatingChange = {
+                onDishesChanged(mealInstanceDetails.mealDetails.copy(rating = it))
+            },
+            rating = mealInstanceDetails.mealDetails.rating,
+        )
+        ImageField(
+            modifier = Modifier,
+            imageSrc = mealInstanceDetails.mealDetails.imgSrc,
+            onUpdateImage = onUpdateImage,
+        )
     }
 }
 
@@ -592,7 +613,12 @@ fun MealField(
             modifier = modifier
                 .fillMaxWidth()
                 .padding(horizontal = dimensionResource(id = paddingId))
-                .onFocusChanged { focusState -> if (!focusState.isFocused) active = false },
+                .onFocusChanged { focusState ->
+                    if (!focusState.isFocused) {
+                        onMealClick(mealDetails.name)
+                        active = false
+                    }
+                },
             query = mealDetails.name,
             onQueryChange = onNameChange,
             onSearch = {
@@ -665,14 +691,13 @@ fun MealField(
 fun FieldHeader(
     modifier: Modifier = Modifier,
     string: String = "Meal",
+    style: TextStyle = MaterialTheme.typography.titleLarge
 ) {
     Text(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(top = dimensionResource(id = R.dimen.padding_medium)),
+        modifier = modifier,
         textAlign = TextAlign.Center,
         text = string,
-        style = MaterialTheme.typography.titleLarge,
+        style = style,
     )
 }
 
@@ -707,30 +732,148 @@ fun DishesFields(
     onDishEditClick: (Int) -> Unit,
     isDuplicate: (Int) -> Boolean = { _ -> true },
 ) {
-    Row {
-        FieldHeader(string = stringResource(id = R.string.dishes_header))
+    val altFormat = remember { mutableStateOf(false) }
+
+    Box(
+        modifier = modifier.fillMaxWidth(),
+        contentAlignment = Alignment.Center,
+    ) {
+        FieldHeader(
+            modifier = Modifier,
+            string = stringResource(id = R.string.dishes_header),
+        )
+        Row(
+            modifier = Modifier.align(Alignment.CenterEnd),
+            horizontalArrangement = Arrangement.End
+        ) {
+            FormatCheckBox(
+                modifier = Modifier
+                    .padding(
+                        vertical = 0.dp,
+                        horizontal = dimensionResource(id = R.dimen.padding_medium)
+                    ),
+                value = altFormat.value,
+                onCheck = { altFormat.value = it }
+            )
+        }
     }
 
-    mealDetails.dishes.forEachIndexed { index, dish ->
-        DishField(
-            modifier = Modifier,
-            onNameChange = { onNameChange(index, it) },
-            onDishClick = { onDishClick(index, it) },
-            dishDetails = dish,
-            searchResults = searchResults,
-            valid = !isDuplicate(index),
-            onDeleteDishClick = { onDeleteDishClick(index) },
-            onRestoreDishClick = onRestoreDishClick,
-            onDishEditClick = { onDishEditClick(index) },
-            onDishSearchTermChanged = onDishSearchTermChanged,
+    if (altFormat.value) {
+        FieldHeader(
+            modifier = Modifier.fillMaxWidth(),
+            string = stringResource(id = R.string.dishes_subheader_learning),
+            style = MaterialTheme.typography.titleMedium
+        )
+        mealDetails.dishes.forEachIndexed { index, dish ->
+            if (dish.rating == Rating.LEARNING) {
+                DishField(
+                    modifier = Modifier,
+                    onNameChange = { onNameChange(index, it) },
+                    onDishClick = { onDishClick(index, it) },
+                    dishDetails = dish,
+                    searchResults = searchResults.filter { it.rating == Rating.LEARNING },
+                    valid = !isDuplicate(index),
+                    onDeleteDishClick = { onDeleteDishClick(index) },
+                    onRestoreDishClick = onRestoreDishClick,
+                    onDishEditClick = { onDishEditClick(index) },
+                    onDishSearchTermChanged = onDishSearchTermChanged,
+                )
+            }
+        }
+        AddDishButton(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(dimensionResource(id = R.dimen.padding_medium)),
+            onClick = {
+                onDishAdded(DishDetails(dishId = 0, name = "", rating = Rating.LEARNING))
+            },
+        )
+
+        FieldHeader(
+            modifier = Modifier.fillMaxWidth(),
+            string = stringResource(id = R.string.dishes_subheader_like),
+            style = MaterialTheme.typography.titleMedium
+        )
+        mealDetails.dishes.forEachIndexed { index, dish ->
+            if (dish.rating == Rating.LIKEIT) {
+                DishField(
+                    modifier = Modifier,
+                    onNameChange = { onNameChange(index, it) },
+                    onDishClick = { onDishClick(index, it) },
+                    dishDetails = dish,
+                    searchResults = searchResults.filter { it.rating == Rating.LIKEIT },
+                    valid = !isDuplicate(index),
+                    onDeleteDishClick = { onDeleteDishClick(index) },
+                    onRestoreDishClick = onRestoreDishClick,
+                    onDishEditClick = { onDishEditClick(index) },
+                    onDishSearchTermChanged = onDishSearchTermChanged,
+                )
+            }
+        }
+        AddDishButton(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(dimensionResource(id = R.dimen.padding_medium)),
+            onClick = {
+                onDishAdded(DishDetails(dishId = 0, name = "", rating = Rating.LIKEIT))
+            },
+        )
+
+        FieldHeader(
+            modifier = Modifier.fillMaxWidth(),
+            string = stringResource(id = R.string.dishes_subheader_love),
+            style = MaterialTheme.typography.titleMedium
+        )
+        mealDetails.dishes.forEachIndexed { index, dish ->
+            if (dish.rating == Rating.LOVEIT) {
+                DishField(
+                    modifier = Modifier,
+                    onNameChange = { onNameChange(index, it) },
+                    onDishClick = { onDishClick(index, it) },
+                    dishDetails = dish,
+                    searchResults = searchResults.filter { it.rating == Rating.LOVEIT },
+                    valid = !isDuplicate(index),
+                    onDeleteDishClick = { onDeleteDishClick(index) },
+                    onRestoreDishClick = onRestoreDishClick,
+                    onDishEditClick = { onDishEditClick(index) },
+                    onDishSearchTermChanged = onDishSearchTermChanged,
+                )
+            }
+        }
+        AddDishButton(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(dimensionResource(id = R.dimen.padding_medium)),
+            onClick = {
+                onDishAdded(DishDetails(dishId = 0, name = "", rating = Rating.LOVEIT))
+            },
         )
     }
-    AddDishButton(
-        modifier = modifier,
-        onClick = {
-            onDishAdded(DishDetails(dishId = 0, name = "", rating = Rating.LIKEIT))
-        },
-    )
+    else
+    {
+        mealDetails.dishes.forEachIndexed { index, dish ->
+            DishField(
+                modifier = Modifier,
+                onNameChange = { onNameChange(index, it) },
+                onDishClick = { onDishClick(index, it) },
+                dishDetails = dish,
+                searchResults = searchResults,
+                valid = !isDuplicate(index),
+                onDeleteDishClick = { onDeleteDishClick(index) },
+                onRestoreDishClick = onRestoreDishClick,
+                onDishEditClick = { onDishEditClick(index) },
+                onDishSearchTermChanged = onDishSearchTermChanged,
+            )
+        }
+        AddDishButton(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(dimensionResource(id = R.dimen.padding_medium)),
+            onClick = {
+                onDishAdded(DishDetails(dishId = 0, name = "", rating = Rating.LIKEIT))
+            },
+        )
+    }
 }
 
 @Composable
@@ -797,7 +940,12 @@ fun DishField(
                 modifier = modifier
                     .fillMaxSize()
                     .padding(horizontal = dimensionResource(id = horizontalPaddingId))
-                    .onFocusChanged { focusState -> if (!focusState.isFocused) active = false },
+                    .onFocusChanged { focusState ->
+                        if (!focusState.isFocused) {
+                            onDishClick(dishDetails.name)
+                            active = false
+                        }
+                    },
                 query = dishDetails.name,
                 onQueryChange = onNameChange,
                 onSearch = {
@@ -957,15 +1105,20 @@ fun RatingSelectorItem(
                 .clickable(onClick = onClick),
             verticalArrangement = Arrangement.SpaceEvenly,
         ) {
-            Text(text = ratingEmoji.emojiString,
+            Text(
                 modifier = Modifier
                     .align(Alignment.CenterHorizontally),
+                text = ratingEmoji.emojiString,
                 fontSize = when (selected) {
                     true -> 18.sp
                     false -> 10.sp
-                }
+                },
             )
-            Text(text = ratingEmoji.description)
+            Text(
+                modifier = Modifier,
+                text = ratingEmoji.description,
+                maxLines = 2,
+            )
         }
     }
 }

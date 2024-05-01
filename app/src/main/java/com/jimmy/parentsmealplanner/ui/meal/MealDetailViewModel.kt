@@ -1,6 +1,5 @@
 package com.jimmy.parentsmealplanner.ui.meal
 
-import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -352,11 +351,9 @@ class MealDetailViewModel @Inject constructor(
 
         // If the dish is saved as part of the meal in the db, it needs to be marked for deletion
         if (markDishForDeletion(targetDish)) {
-            Log.d("DEBUG", "Dish marked for deletion: $targetDish" )
             return false
         }
         else { // otherwise it can just be removed from the list immediately
-            Log.d("DEBUG", "Dish deleted immediately: $targetDish" )
             val updatedDishes =
                 mealDetailUiState.mealInstanceDetails.mealDetails.dishes.minus(
                     targetDish
