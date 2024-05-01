@@ -917,7 +917,7 @@ fun MealHolder(
     ) -> Unit = { _, _, _, _, _ -> },
     onDeleteClick: (instanceId: Long) -> Unit = { _ -> },
 ) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
+    var expanded by rememberSaveable { mutableStateOf(true) }
     val imageVector: ImageVector = (
         when (expanded) {
             true -> ImageVector.vectorResource(id = R.drawable.baseline_arrow_drop_up_24)
@@ -961,6 +961,7 @@ fun MealHolder(
                 mealName = mealInstance.mealDetails.name,
             )
         }
+        Text(text = mealInstance.mealDetails.rating.ratingEmoji.emojiString)
         Image(
             modifier =
             Modifier
@@ -999,7 +1000,10 @@ fun MealHolder(
     when {
         expanded -> {
             mealInstance.mealDetails.dishes.forEach { dish ->
-                DishText(dishName = dish.name)
+                Row {
+                    DishText(dishName = dish.name)
+                    Text(text = dish.rating.ratingEmoji.emojiString)
+                }
             }
         }
     }
@@ -1021,7 +1025,7 @@ fun DishText(
     dishName: String = stringResource(R.string.dish_name_placeholder),
 ) {
     Text(
-        modifier = modifier.padding(vertical = 4.dp, horizontal = 16.dp),
+        modifier = modifier.padding(top = 4.dp, bottom = 4.dp, start = 32.dp),
         text = "- $dishName",
         style = MaterialTheme.typography.labelLarge,
     )

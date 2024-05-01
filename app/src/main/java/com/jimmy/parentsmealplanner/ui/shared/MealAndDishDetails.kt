@@ -48,7 +48,7 @@ enum class Occasion(val icon: Int) {
 }
 
 enum class Rating(val ratingEmoji: RatingEmoji) {
-    LEARNING(RatingEmoji(emojiString = "\uD83E\uDD14", description = "Learning to Love It")),
+    LEARNING(RatingEmoji(emojiString = "\uD83E\uDD14", description = "Learning It")),
     LIKEIT(RatingEmoji(emojiString = "\uD83D\uDE0A", description = "Like It")),
     LOVEIT(RatingEmoji(emojiString = "\uD83E\uDD70", description = "Love It")),
 }

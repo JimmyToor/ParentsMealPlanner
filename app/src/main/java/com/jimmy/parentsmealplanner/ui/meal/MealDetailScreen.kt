@@ -128,7 +128,7 @@ fun MealDetail(
     val mealSearchResults by viewModel.filteredMealSearchResults.collectAsStateWithLifecycle()
     val dishSearchResults by viewModel.filteredDishSearchResults.collectAsStateWithLifecycle()
     val showRenameMealDialog = rememberSaveable { mutableStateOf(false) }
-    val showRenameDishDialog = rememberSaveable { mutableStateOf(false) }
+    val showEditDishDialog = rememberSaveable { mutableStateOf(false) }
     val showUnsavedChangesDialog = rememberSaveable { mutableStateOf(false) }
     val targetDishIndex = rememberSaveable { mutableIntStateOf(0) }
     val context = LocalContext.current
@@ -178,24 +178,25 @@ fun MealDetail(
     }
 
     when {
-        showRenameDishDialog.value -> {
-            RenameDishDialog(
-                onDismissRequest = { showRenameDishDialog.value = false },
-                onConfirmation = {
+        showEditDishDialog.value -> {
+            EditDishDialog(
+                onDismissRequest = { showEditDishDialog.value = false },
+                onConfirmation = { newName, newRating ->
                     viewModel.viewModelScope.launch {
-                        val result = viewModel.updateDishName(
+                        val result = viewModel.updateDish(
                             index = targetDishIndex.intValue,
-                            newName = it,
+                            newName = newName,
+                            newRating = newRating,
                         )
                         checkResult(
                             result,
                             context,
-                            showRenameDishDialog,
+                            showEditDishDialog,
                             "A dish with that name already exists."
                         )
                     }
                 },
-                name = mealDetailUiState.mealInstanceDetails.mealDetails
+                initialName = mealDetailUiState.mealInstanceDetails.mealDetails
                     .dishes[targetDishIndex.intValue].name,
             )
         }
@@ -252,7 +253,7 @@ fun MealDetail(
                 onMealEditClick = { showRenameMealDialog.value = true },
                 onDishEditClick = {
                     targetDishIndex.intValue = it
-                    showRenameDishDialog.value = true
+                    showEditDishDialog.value = true
                 },
                 onUpdateImage = viewModel::updateImage,
                 isDuplicateCheck = viewModel::isDuplicate,
@@ -311,86 +312,115 @@ fun RenameMealDialog(
     Dialog(
         onDismissRequest = onDismissRequest,
     ) {
-        RenameForm(
-            onDismissRequest = onDismissRequest,
-            onConfirmation = onConfirmation,
-            titleText = R.string.rename_meal,
-            initialName = name,
-        )
+        Card(
+            modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            shape = RoundedCornerShape(16.dp),
+        ) {
+            RenameForm(
+                titleText = R.string.rename_meal,
+                name = name,
+            )
+            DialogButtons(
+                onDismissRequest = onDismissRequest,
+                onConfirmation = { onConfirmation(name) }
+            )
+        }
     }
 }
 
 @Composable
 @Preview
-fun RenameDishDialog(
+fun EditDishDialog(
     onDismissRequest: () -> Unit = { },
-    onConfirmation: (String) -> Unit = { },
-    name: String = "Dish Name",
+    onConfirmation: (String, Rating) -> Unit = { _, _ -> },
+    initialName: String = "Dish Name",
+    initialRating: Rating = Rating.LIKEIT,
 ) {
+    var name by rememberSaveable { mutableStateOf(initialName) }
+    var rating by rememberSaveable { mutableStateOf(initialRating) }
+
     Dialog(
         onDismissRequest = onDismissRequest,
     ) {
-        RenameForm(
-            onDismissRequest = onDismissRequest,
-            onConfirmation = onConfirmation,
-            titleText = R.string.rename_dish,
-            initialName = name
-        )
+        Card(
+            modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            shape = RoundedCornerShape(16.dp),
+        ) {
+            RenameForm(
+                onValueChange = {
+                    name = it
+                },
+                titleText = R.string.edit_dish,
+                name = name
+            )
+            RatingSelector(
+                modifier = Modifier.fillMaxWidth(),
+                onRatingChange = { rating = it },
+                rating = rating
+            )
+            DialogButtons(
+                onDismissRequest = onDismissRequest,
+                onConfirmation = { onConfirmation(name, rating) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun DialogButtons(
+    onDismissRequest: () -> Unit,
+    onConfirmation: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        TextButton(
+            onClick = onDismissRequest,
+            modifier = Modifier.padding(8.dp),
+        ) {
+            Text("Cancel")
+        }
+        TextButton(
+            onClick = onConfirmation,
+            modifier = Modifier
+                .padding(8.dp)
+        ) {
+            Text("Confirm")
+        }
     }
 }
 
 @Composable
 fun RenameForm(
-    onDismissRequest: () -> Unit,
-    onConfirmation: (String) -> Unit,
     titleText: Int = R.string.rename,
-    initialName: String = "Default Name"
+    name: String = "Default Name",
+    onValueChange: (String) -> Unit = {},
 ) {
-    var name by rememberSaveable { mutableStateOf(initialName) }
-    Card(
-        modifier =
-        Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        shape = RoundedCornerShape(16.dp),
+
+    Column(
+        modifier = Modifier.padding(24.dp),
     ) {
-        Column(
-            modifier = Modifier.padding(24.dp),
-        ) {
-            Text(
-                modifier =
-                Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .padding(top = 12.dp),
-                style = MaterialTheme.typography.titleLarge,
-                text = stringResource(id = titleText),
-            )
-            TextField(
-                value = name,
-                onValueChange = {
-                    name = it
-                },
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-            ) {
-                TextButton(
-                    onClick = onDismissRequest,
-                    modifier = Modifier.padding(8.dp),
-                ) {
-                    Text("Cancel")
-                }
-                TextButton(
-                    onClick = { onConfirmation(name) },
-                    modifier = Modifier
-                        .padding(8.dp)
-                ) {
-                    Text("Confirm")
-                }
-            }
-        }
+        Text(
+            modifier =
+            Modifier
+                .align(Alignment.CenterHorizontally)
+                .padding(top = 12.dp),
+            style = MaterialTheme.typography.titleLarge,
+            text = stringResource(id = titleText),
+        )
+        TextField(
+            value = name,
+            onValueChange = onValueChange,
+        )
     }
+
 }
 
 @Composable
@@ -551,6 +581,7 @@ fun ImageField(
             }
         }
     }
+
 }
 
 @Composable
@@ -1079,10 +1110,12 @@ fun RatingSelector(
     Row(
         modifier = modifier
             .padding(dimensionResource(id = R.dimen.padding_medium)),
-        horizontalArrangement = Arrangement.spacedBy(dimensionResource(id = R.dimen.padding_small))
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.Top,
     ) {
         Rating.entries.map { value ->
             RatingSelectorItem(
+                modifier = Modifier.weight(1f),
                 onClick = { onRatingChange(value) },
                 ratingEmoji = value.ratingEmoji,
                 selected = value == rating,
@@ -1093,30 +1126,34 @@ fun RatingSelector(
 
 @Composable
 fun RatingSelectorItem(
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
     ratingEmoji: RatingEmoji,
     selected: Boolean = false,
 ) {
-    Row {
+    Row (
+        modifier = modifier,
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.Top
+    ){
         Column(
             modifier = Modifier
-                .padding(dimensionResource(id = R.dimen.padding_medium))
                 .align(Alignment.CenterVertically)
                 .clickable(onClick = onClick),
-            verticalArrangement = Arrangement.SpaceEvenly,
         ) {
             Text(
                 modifier = Modifier
                     .align(Alignment.CenterHorizontally),
                 text = ratingEmoji.emojiString,
                 fontSize = when (selected) {
-                    true -> 18.sp
-                    false -> 10.sp
+                    true -> 32.sp
+                    false -> 18.sp
                 },
             )
             Text(
                 modifier = Modifier,
                 text = ratingEmoji.description,
+                textAlign = TextAlign.Center,
                 maxLines = 2,
             )
         }

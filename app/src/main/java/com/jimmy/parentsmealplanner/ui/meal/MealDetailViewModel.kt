@@ -13,6 +13,7 @@ import com.jimmy.parentsmealplanner.ui.shared.DishDetails
 import com.jimmy.parentsmealplanner.ui.shared.MealDetails
 import com.jimmy.parentsmealplanner.ui.shared.MealInstanceDetails
 import com.jimmy.parentsmealplanner.ui.shared.Occasion
+import com.jimmy.parentsmealplanner.ui.shared.Rating
 import com.jimmy.parentsmealplanner.ui.shared.toDish
 import com.jimmy.parentsmealplanner.ui.shared.toDishDetails
 import com.jimmy.parentsmealplanner.ui.shared.toDishInMeal
@@ -292,20 +293,23 @@ class MealDetailViewModel @Inject constructor(
         )
     }
 
-    suspend fun updateDishName(index: Int, newName: String): Boolean {
+    suspend fun updateDish(index: Int, newName: String, newRating: Rating): Boolean {
         val updatedDishes = mealDetailUiState.mealInstanceDetails.mealDetails.dishes.toMutableList()
         val savedDishIndex = savedDishes.indexOf(updatedDishes[index])
         val oldDish = updatedDishes[index]
 
         updatedDishes[index] = updatedDishes[index].copy(
-            name = newName
+            name = newName,
+            rating = newRating
         )
 
         val updateSuccess = mealRepository.updateDish(updatedDishes[index].toDish())
 
         if (updateSuccess) {
-            savedDishes[savedDishIndex] = updatedDishes[index]
-            updatedDishes.replaceAll { if (it.name == oldDish.name) it.copy(dishId = 0) else it }
+            if (oldDish.name != newName) {
+                savedDishes[savedDishIndex] = updatedDishes[index]
+                updatedDishes.replaceAll { if (it.name == oldDish.name) it.copy(dishId = 0) else it }
+            }
 
             updateUiState(
                 mealDetails = mealDetailUiState.mealInstanceDetails.mealDetails.copy(

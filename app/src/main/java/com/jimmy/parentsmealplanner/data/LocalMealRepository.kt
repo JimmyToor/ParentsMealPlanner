@@ -148,7 +148,8 @@ class LocalMealRepository @Inject constructor(
     }
 
     override suspend fun updateDish(dish: Dish): Boolean {
-        return if (dishDao.getDishByName(dish.name) == null) {
+        val existingDish = dishDao.getDishByName(dish.name)
+        return if (existingDish == null || existingDish.dishId == dish.dishId) {
             dishDao.update(dish)
             true
         } else false
