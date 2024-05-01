@@ -56,6 +56,11 @@ class LocalMealRepository @Inject constructor(
 
     override suspend fun insertMeal(meal: Meal): Long = mealDao.insert(meal)
 
+    /**
+     * Upsert a mealWithDishes and return the mealWithDishes with updated IDs.
+     * @param mealWithDishes The mealWithDishes to upsert
+     * @return The updated mealWithDishes
+     */
     override suspend fun upsertMealWithDishes(mealWithDishes: MealWithDishes): MealWithDishes {
         var mealId = mealDao.upsert(mealWithDishes.meal)
         val dishIds = dishDao.upsertAll(mealWithDishes.dishes)
@@ -63,6 +68,8 @@ class LocalMealRepository @Inject constructor(
         if (mealId == -1L) {
             mealId = mealWithDishes.meal.mealId
         }
+
+        // Update the mealId in the meal and associated dishes
         return mealWithDishes.copy(
             meal = mealWithDishes.meal.copy(mealId = mealId),
             dishes = dishIds.mapIndexed { index, newId ->
@@ -74,9 +81,9 @@ class LocalMealRepository @Inject constructor(
     }
 
     /**
-     * Upsert an mealWithDishesInstance and return the updated mealWithDishesInstance.
-     * @param mealWithDishesInstance the mealWithDishesInstance to upsert
-     * @return the updated mealWithDishesInstance
+     * Upsert a mealWithDishesInstance and return the mealWithDishesInstance with updated IDs.
+     * @param mealWithDishesInstance The mealWithDishesInstance to upsert
+     * @return The updated mealWithDishesInstance
      */
     override suspend fun upsertMealWithDishesInstance(
         mealWithDishesInstance: MealWithDishesInstance): MealWithDishesInstance {
@@ -140,19 +147,14 @@ class LocalMealRepository @Inject constructor(
 
     override suspend fun deleteMeal(meal: Meal) = mealDao.delete(meal)
 
-    override suspend fun updateMeal(meal: Meal): Boolean{
-        return if (mealDao.getMealByName(meal.name) == null) {
-            mealDao.update(meal)
-            true
-        } else false
-    }
+    override suspend fun getMealByName(name: String): Meal? = mealDao.getMealByName(name)
 
-    override suspend fun updateDish(dish: Dish): Boolean {
-        val existingDish = dishDao.getDishByName(dish.name)
-        return if (existingDish == null || existingDish.dishId == dish.dishId) {
-            dishDao.update(dish)
-            true
-        } else false
+    override suspend fun updateMeal(meal: Meal) = mealDao.update(meal)
+
+    override suspend fun updateDish(dish: Dish) = dishDao.update(dish)
+
+    override suspend fun getDishByName(name: String): Dish? {
+        return dishDao.getDishByName(name)
     }
 
     override suspend fun getUser(id: Long): User? = userDao.getUser(id)

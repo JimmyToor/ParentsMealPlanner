@@ -111,6 +111,7 @@ object MealPlanningDest : NavigationDestination {
  * @param modifier Modifier for styling.
  * @param navigateToMealDetail Function to navigate to meal detail screen.
  * @param viewModel ViewModel for the meal planner screen.
+ * @param mainViewModel Main ViewModel for the activity
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -200,7 +201,7 @@ fun MealPlanner(
                 dateUiState = dateUiState,
                 onMealClick = navigateToMealDetail,
                 onMealDeleteClick = viewModel::deleteInstance,
-                listState = listState,
+                daysOfWeekListState = listState,
             )
         }
     }
@@ -213,13 +214,13 @@ fun MealPlanner(
 }
 
 /**
- * The WeekBar displays the days of the selected week in a horizontal list.
- * Each day is represented by a Column that contains two Texts. The first Text displays the day of the week and the second Text displays the day of the month.
- * The Column is clickable and calls the onDayClick function when clicked.
+ * Displays the days of the selected week in a horizontal list.
  *
  * @param modifier The Modifier to be applied to the WeekBar.
- * @param dateUiState The state of the date interface. This is used to get the days of the selected week.
- * @param onSwipe A function that is called when a day is clicked.
+ * @param dateUiState The state of the date interface.
+ * @param onSwipe The function that is called when the week bar is swiped left or right.
+ * @param onDayClick The function that is called when a day is clicked.
+ *
  */
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
@@ -244,6 +245,7 @@ fun WeekBar(
         )
     }
 
+    // Change the week bar to the previous or next week when swiped
     LaunchedEffect(weekSwipeState.currentValue) {
         snapshotFlow { weekSwipeState }.collect { state ->
             if (state.currentValue == DragAnchors.Start) {
@@ -271,7 +273,6 @@ fun WeekBar(
         ), label = "Week Bar Arrow Size Animation"
     )
 
-
     Box(
         modifier = modifier
             .fillMaxWidth(),
@@ -280,7 +281,7 @@ fun WeekBar(
             modifier = Modifier
                 .fillMaxWidth(),
             contentAlignment = Alignment.Center,
-        ) {
+        ) {// Week Bar Arrow Animation
             if (weekSwipeState.targetValue <= DragAnchors.Middle && !weekSwipeState.offset.isNaN()
                 && weekSwipeState.offset < 0) {
                 Icon(
@@ -303,6 +304,7 @@ fun WeekBar(
             }
         }
 
+        // Row of days
         LazyRow(
             modifier = modifier
                 .fillMaxWidth()
@@ -364,12 +366,12 @@ fun WeekBar(
 /**
  * The UserBar consists of a dropdown menu for selecting a user and an icon for adding a new user.
  *
- * @param userUiState The state of the user interface. This is used to get the list of all users and the currently selected user.
+ * @param userUiState The state of the user interface.
  * @param userValues A list of UserDetails objects. Each UserDetails object represents a user.
- * @param onUserChange A function that is called when a user is selected from the dropdown menu.
- * @param onUserEditClick A function that is called when the edit icon of a user is clicked in the dropdown menu.
- * @param onUserAddClick A function that is called when the add user icon is clicked.
- * @param onUserDeleteClick A function that is called when the delete icon of a user is clicked in the dropdown menu.
+ * @param onUserChange The function that is called when a user is selected from the dropdown menu.
+ * @param onUserEditClick The function that is called when the edit icon of a user is clicked in the dropdown menu.
+ * @param onUserAddClick The function that is called when the add user icon is clicked.
+ * @param onUserDeleteClick The function that is called when the delete icon of a user is clicked in the dropdown menu.
  */
 @Composable
 @Preview
@@ -411,16 +413,14 @@ fun UserBar(
 }
 
 /**
- * The UserDropdown consists of a TextField and an ExposedDropdownMenu.
- * The TextField displays the currently selected user. The ExposedDropdownMenu displays a list of all users.
- * Each user in the list is represented by a DropdownMenuItem. Each DropdownMenuItem has a leading icon for deleting the user and a trailing icon for editing the user.
+ * Displays a dropdown menu for selecting a user.
  *
  * @param modifier The Modifier to be applied to the UserDropdown.
  * @param values A list of UserDetails objects. Each UserDetails object represents a user.
- * @param onUserChange A function that is called when a user is selected from the dropdown menu.
- * @param onUserEditClick A function that is called when the edit icon of a user is clicked in the dropdown menu.
- * @param onUserAddClick A function that is called when the add user icon is clicked.
- * @param onUserDeleteClick A function that is called when the delete icon of a user is clicked in the dropdown menu.
+ * @param onUserChange The function that is called when a user is selected from the dropdown menu.
+ * @param onUserEditClick The function that is called when the edit icon of a user is clicked in the dropdown menu.
+ * @param onUserAddClick The function that is called when the add user icon is clicked.
+ * @param onUserDeleteClick The function that is called when the delete icon of a user is clicked in the dropdown menu.
  * @param selectedValue The name of the currently selected user. This is displayed in the TextField.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -441,6 +441,7 @@ fun UserDropdown(
 ) {
     var expanded by remember { mutableStateOf(false) }
 
+    // Dropdown menu of users
     ExposedDropdownMenuBox(
         expanded = expanded,
         onExpandedChange = {
@@ -497,13 +498,13 @@ fun UserDropdown(
 }
 
 /**
- * The UserDialog is a Dialog that contains a UserForm. The UserDialog is used to add a new user or edit an existing user.
+ * Displays a Dialog that contains a UserForm used to add a new user or edit an existing user.
  *
- * @param onDismissRequest A function that is called when the dialog is dismissed.
- * @param onConfirmation A function that is called when the user confirms the action in the dialog.
- * @param userDetails A UserDetails object that represents the user. This is used to pre-fill the UserForm with the user's details.
- * @param onNameChange A function that is called when the name of the user is changed in the UserForm.
- * @param titleText The title of the dialog. This is displayed at the top of the dialog.
+ * @param onDismissRequest The function that is called when the dialog is dismissed.
+ * @param onConfirmation The function that is called when the user confirms the action in the dialog.
+ * @param userDetails A UserDetails object that represents the user.
+ * @param onNameChange The function that is called when the name of the user is changed in the UserForm.
+ * @param titleText The title of the dialog.
  */
 @Composable
 @Preview
@@ -529,12 +530,11 @@ fun UserDialog(
 
 /**
  * The UserForm is used to add a new user or edit an existing user.
- * The UserForm consists of a TextField for entering the user's name and two buttons for confirming or dismissing the action.
  *
- * @param onDismissRequest A function that is called when the dismiss button is clicked.
- * @param onConfirmation A function that is called when the confirm button is clicked.
- * @param onNameChange A function that is called when the name of the user is changed in the TextField.
- * @param titleText The title of the dialog. This is displayed at the top of the dialog.
+ * @param onDismissRequest The function that is called when the dismiss button is clicked.
+ * @param onConfirmation The function that is called when the confirm button is clicked.
+ * @param onNameChange The function that is called when the name of the user is changed in the TextField.
+ * @param titleText The title of the dialog.
  * @param userDetails A UserDetails object that represents the target user. This is used to pre-fill the TextField with the user's name.
  */
 @Composable
@@ -555,7 +555,7 @@ fun UserForm(
         Column(
             modifier = Modifier.padding(24.dp),
         ) {
-            Text(
+            Text( // Title
                 modifier =
                 Modifier
                     .align(Alignment.CenterHorizontally)
@@ -563,7 +563,7 @@ fun UserForm(
                 style = MaterialTheme.typography.titleLarge,
                 text = titleText,
             )
-            TextField(
+            TextField( // User name
                 value = userDetails.name,
                 onValueChange = {
                     onNameChange(userDetails.copy(name = it))
@@ -576,7 +576,7 @@ fun UserForm(
                     }
                 },
             )
-            Row(
+            Row( // Buttons
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Center,
             ) {
@@ -602,11 +602,12 @@ fun UserForm(
  * It displays a list of days for the selected week. For each day, it displays the meals planned for the selected user.
  *
  * @param modifier The Modifier to be applied to the MealPlanningBody.
- * @param mealUiState The state of the meal interface. This is used to get the meal instances for the selected user and date.
- * @param dateUiState The state of the date interface. This is used to get the days of the selected week.
- * @param onMealClick A function that is called when a meal is clicked. The ID of the meal, the date, the occasion, the ID of the user, and the ID of the meal instance are passed as parameters to this function.
+ * @param mealUiState The state of the meal interface.
+ * @param dateUiState The state of the date interface.
+ * @param onMealClick The function that is called when a meal is clicked.
  * @param userUiState The state of the user interface. This is used to get the ID of the selected user.
- * @param onMealDeleteClick A function that is called when the delete icon of a meal is clicked.
+ * @param onMealDeleteClick The function that is called when the delete icon of a meal is clicked.
+ * @param daysOfWeekListState The state of the list of days. This is used to scroll to the selected day.
  */
 @Composable
 
@@ -618,14 +619,17 @@ fun MealPlanningBody(
         -> Unit = { _, _, _, _, _ -> },
     userUiState: UserUiState = UserUiState(),
     onMealDeleteClick: (Long) -> Unit = { _ -> },
-    listState: LazyListState = LazyListState(),
+    daysOfWeekListState: LazyListState = LazyListState(),
 ) {
+    // Scroll down to the selected day
     LaunchedEffect(key1 = true) {
-        listState.animateScrollToItem(dateUiState.selectedDay.dayOfWeek.ordinal)
+        daysOfWeekListState.animateScrollToItem(dateUiState.selectedDay.dayOfWeek.ordinal)
     }
+
+    // Display the meals for each day of the selected week
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
-        state = listState,
+        state = daysOfWeekListState,
     ) {
         items(dateUiState.daysOfSelectedWeek) {day ->
             DayOfTheWeek(
@@ -665,15 +669,14 @@ fun MealPlanningBodyPreviewLight() {
 
 
 /**
- * The DayOfTheWeek displays the meals planned for a specific day.
- * It consists of a Text that displays the date and a DailyMeals that displays the meals.
+ * Displays the meals planned for a specific day.
  *
  * @param modifier The Modifier to be applied to the DayOfTheWeek.
  * @param date The date of the day. This is displayed in the Text.
  * @param mealInstances A list of MealInstanceDetails objects. Each MealInstanceDetails object represents a meal planned for the day.
- * @param onMealClick A function that is called when a meal is clicked. The ID of the meal, the date, the occasion, the ID of the user, and the ID of the meal instance are passed as parameters to this function.
+ * @param onMealClick The function that is called when a meal is clicked.
  * @param userId The ID of the user. This is used to filter the meals.
- * @param onDeleteClick A function that is called when the delete icon of a meal is clicked.
+ * @param onDeleteClick The function that is called when the delete icon of a meal is clicked.
  */
 @Composable
 @Preview(apiLevel = 33)
@@ -716,16 +719,15 @@ fun DayOfTheWeek(
 }
 
 /**
- * DailyMeals displays the meals planned for each occasion of a specific day.
- * It consists of a Column that contains OccasionMeals for each occasion. The OccasionMeals displays the meals planned for a specific occasion.
+ * Displays the meals planned for each occasion of a specific day.
  *
  * @param modifier The Modifier to be applied to the DailyMeals.
  * @param mealInstances A list of MealInstanceDetails objects. Each MealInstanceDetails object represents a meal planned for the day.
- * @param onMealClick A function that is called when a meal is clicked. The ID of the meal, the date, the occasion, the ID of the user, and the ID of the meal instance are passed as parameters to this function.
+ * @param onMealClick The function that is called when a meal is clicked.
  * @param date The date of the day. This is used to filter the meals.
  * @param occasion The occasion of the meal. This is used to filter the meals.
  * @param userId The ID of the user. This is used to filter the meals.
- * @param onDeleteClick A function that is called when the delete icon of a meal is clicked.
+ * @param onDeleteClick The function that is called when the delete icon of a meal is clicked.
  */
 @Composable
 @Preview(apiLevel = 33)
@@ -823,15 +825,15 @@ fun OccasionMealsPreview() {
 }
 
 /**
- * This composable function represents the meals for a specific occasion.
+ * Displays the meals for a specific occasion.
  *
  * @param modifier The Modifier to be applied to the OccasionMeals.
  * @param mealsForOccasion A list of MealInstanceDetails objects representing the meals for the occasion.
- * @param onEditClick A function that is called when a meal is clicked for editing. It takes the mealId, date, occasion, userId, and instanceId as parameters.
+ * @param onEditClick The function that is called when a meal is clicked for editing.
  * @param date The date of the meals. This is used to filter the meals.
  * @param occasion The occasion of the meals. This is used to filter the meals.
  * @param userId The ID of the user. This is used to filter the meals.
- * @param onDeleteClick A function that is called when the delete icon of a meal is clicked.
+ * @param onDeleteClick The function that is called when the delete icon of a meal is clicked.
  */
 @Composable
 fun OccasionMeals(
@@ -886,12 +888,12 @@ fun OccasionMeals(
 }
 
 /**
- * This composable function represents a holder for a meal.
+ * Displays a single meal instance with all related details and actions.
  *
  * @param modifier The Modifier to be applied to the MealHolder.
  * @param mealInstance The details of the meal instance to be displayed.
- * @param onEditClick A function that is called when the meal is clicked for editing. It takes the mealId, date, occasion, userId, and instanceId as parameters.
- * @param onDeleteClick A function that is called when the delete icon of a meal is clicked.
+ * @param onEditClick The function that is called when the meal is clicked for editing.
+ * @param onDeleteClick The function that is called when the delete icon of a meal is clicked.
  */
 @Composable
 @Preview(apiLevel = 33)
@@ -962,16 +964,21 @@ fun MealHolder(
             )
         }
         Text(text = mealInstance.mealDetails.rating.ratingEmoji.emojiString)
-        Image(
-            modifier =
-            Modifier
-                .padding(start = 2.dp, top = 2.dp)
-                .size(30.dp)
-                .clickable { expanded = !expanded }
-                .align(Alignment.CenterVertically),
-            imageVector = imageVector,
-            contentDescription = "Button: Expand/Collapse meal list",
-        )
+        if (mealInstance.mealDetails.dishes.isNotEmpty()) {
+            Image(
+                modifier =
+                Modifier
+                    .padding(start = 2.dp, top = 2.dp)
+                    .size(30.dp)
+                    .clickable { expanded = !expanded }
+                    .align(Alignment.CenterVertically),
+                imageVector = imageVector,
+                colorFilter = ColorFilter.tint(
+                    color = if (LocalDarkTheme.current) Color.White else Color.Black
+                ),
+                contentDescription = "Button: Expand/Collapse meal list",
+            )
+        }
         Column(
             modifier =
             Modifier
@@ -981,17 +988,17 @@ fun MealHolder(
         ) {
             Icon(
                 modifier =
-                Modifier
-                    .clickable {
-                        onEditClick(
-                            mealInstance.mealDetails.mealId,
-                            mealInstance.date,
-                            mealInstance.occasion,
-                            mealInstance.userId,
-                            mealInstance.mealInstanceId,
-                        )
-                    }
-                    .align(Alignment.End),
+                    Modifier
+                        .clickable {
+                            onEditClick(
+                                mealInstance.mealDetails.mealId,
+                                mealInstance.date,
+                                mealInstance.occasion,
+                                mealInstance.userId,
+                                mealInstance.mealInstanceId,
+                            )
+                        }
+                        .align(Alignment.End),
                 imageVector = Icons.Default.Edit,
                 contentDescription = "Edit meal",
             )

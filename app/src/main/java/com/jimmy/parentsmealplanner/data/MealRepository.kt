@@ -11,6 +11,10 @@ import com.jimmy.parentsmealplanner.model.User
 import kotlinx.coroutines.flow.Flow
 import kotlinx.datetime.LocalDate
 
+/**
+ * Interface for the MealRepository.
+ * This repository provides methods for managing meals, dishes, meal instances, and users.
+ */
 interface MealRepository {
     fun getMealsInDateRangeStream(dateStart: LocalDate, dateEnd: LocalDate): Flow<List<Meal>>
 
@@ -30,11 +34,15 @@ interface MealRepository {
 
     suspend fun insertMeal(meal: Meal): Long
 
-    suspend fun updateMeal(meal: Meal): Boolean
+    suspend fun updateMeal(meal: Meal)
 
     suspend fun deleteMeal(meal: Meal)
 
-    suspend fun updateDish(dish: Dish): Boolean
+    suspend fun getMealByName(name: String): Meal?
+
+    suspend fun getDishByName(name: String): Dish?
+
+    suspend fun updateDish(dish: Dish)
 
     suspend fun upsertMealWithDishes(mealWithDishes: MealWithDishes): MealWithDishes
 

@@ -20,7 +20,7 @@ interface MealDao {
     suspend fun insertAll(meals: List<Meal>): List<Long>
 
     @Update
-    suspend fun update(meal: Meal): Int
+    suspend fun update(meal: Meal)
 
     @Upsert
     suspend fun upsert(meal: Meal): Long

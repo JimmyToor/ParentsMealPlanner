@@ -104,6 +104,10 @@ import kotlinx.coroutines.withContext
 import java.util.UUID
 
 
+/**
+ * Object that represents the MealDetail destination in the navigation system.
+ * It contains the route for the destination and the arguments required for the route.
+ */
 object MealDetailDest : NavigationDestination {
     override val route = "meal_detail"
     override val titleRes = R.string.meal_detail
@@ -116,6 +120,17 @@ object MealDetailDest : NavigationDestination {
         "{$INSTANCE_ID_ARG}"
 }
 
+/**
+ * Main composable function for the meal planner screen.
+ * It displays the details of a meal and dishes and allows the user to edit them.
+ *
+ * @param modifier Modifier to be applied to the layout.
+ * @param navigateBack Function to navigate back in the navigation stack.
+ * @param onNavigateUp Function to navigate up in the navigation hierarchy.
+ * @param canNavigateBack Boolean indicating if navigation back is possible.
+ * @param viewModel ViewModel that provides the data for the screen.
+ * @param mainViewModel MainViewModel that provides for the activity.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MealDetail(
@@ -132,32 +147,23 @@ fun MealDetail(
     var showRenameMealDialog by rememberSaveable { mutableStateOf(false) }
     var showEditDishDialog by rememberSaveable { mutableStateOf(false) }
     var showUnsavedChangesDialog by rememberSaveable { mutableStateOf(false) }
+
+    // Index of the dish to be edited
     var targetDishIndex by rememberSaveable { mutableIntStateOf(0) }
     val context = LocalContext.current
 
-    // Show the dialog when the state variable is true
-    if (showUnsavedChangesDialog) {
-        AlertDialog(
-            onDismissRequest = { showUnsavedChangesDialog = false },
-            title = { Text("Discard Changes?") },
-            text = { Text("Any unsaved changes will be lost.") },
-            confirmButton = {
-                TextButton(onClick = {
+    when { // Dialog to discard any unsaved changes made to the meal or dish.
+        showUnsavedChangesDialog -> {
+            UnsavedChangesDialog(
+                onDismissRequest = { showUnsavedChangesDialog = false },
+                onConfirmation = {
                     showUnsavedChangesDialog = false
                     if (!canNavigateBack || !navigateBack()) onNavigateUp()
-                }) {
-                    Text("Yes")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showUnsavedChangesDialog = false }) {
-                    Text("No")
-                }
-            }
-        )
-    }
+                },
+            )
+        }
 
-    when {
+        // Dialog to rename the meal
         showRenameMealDialog -> {
             RenameMealDialog(
                 onDismissRequest = { showRenameMealDialog = false },
@@ -177,9 +183,8 @@ fun MealDetail(
                 name = mealDetailUiState.mealInstanceDetails.mealDetails.name,
             )
         }
-    }
 
-    when {
+        // Dialog to change the dish name or rating
         showEditDishDialog -> {
             EditDishDialog(
                 onDismissRequest = { showEditDishDialog = false },
@@ -200,10 +205,17 @@ fun MealDetail(
                 },
                 initialName = mealDetailUiState.mealInstanceDetails.mealDetails
                     .dishes[targetDishIndex].name,
+                initialRating = mealDetailUiState.mealInstanceDetails.mealDetails
+                    .dishes[targetDishIndex].rating,
+                saved = viewModel.isDishSaved(
+                    mealDetailUiState.mealInstanceDetails.mealDetails
+                        .dishes[targetDishIndex]
+                ),
             )
         }
     }
 
+    // Scaffold that contains the main UI of the screen
     Scaffold(
         modifier = modifier,
         topBar = {
@@ -240,12 +252,12 @@ fun MealDetail(
                     .fillMaxWidth(),
                 mealDetailUiState = viewModel.mealDetailUiState,
                 onDishAdded = viewModel::addDish,
-                onDishesChanged = { viewModel.updateUiState(mealDetails = it) },
+                onMealRatingChanged = viewModel::changeMealRating,
                 onMealInstanceDetailsChange = { viewModel.updateUiState(mealInstanceDetails = it) },
                 onDeleteDishClick = viewModel::deleteDish,
                 onRestoreDishClick = viewModel::unMarkDishForDeletion,
                 onMealNameChanged = viewModel::changeMeal,
-                onDishValueChanged = viewModel::changeDish,
+                onDishNameChanged = viewModel::changeDish,
                 mealSearchResults = mealSearchResults,
                 dishSearchResults = dishSearchResults,
                 onFindExistingMeal = viewModel::findExistingMeal,
@@ -259,17 +271,55 @@ fun MealDetail(
                 },
                 onUpdateImage = viewModel::updateImage,
                 isDuplicateCheck = viewModel::isDuplicate,
+                isDishSaved = viewModel::isDishSaved,
             )
         }
     }
 }
 
+/**
+ * Displays a dialog to the user when there are unsaved changes.
+ *
+ * @param onDismissRequest The function that is invoked when the dialog is dismissed.
+ * @param onConfirmation The function that is invoked when the user confirms to discard the changes.
+ */
+@Composable
+private fun UnsavedChangesDialog(
+    onDismissRequest: () -> Unit,
+    onConfirmation: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        title = { Text("Discard Changes?") },
+        text = { Text("Any unsaved changes will be lost.") },
+        confirmButton = {
+            TextButton(onClick = onConfirmation) {
+                Text("Yes")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismissRequest) {
+                Text("No")
+            }
+        }
+    )
+}
+
+/**
+ * Displays a checkbox with a label.
+ *
+ * @param modifier Modifier to be applied to the layout.
+ * @param value The initial state of the checkbox. Default is false (unchecked).
+ * @param onCheck The function that is invoked when the checkbox state changes.
+ * @param text The text to be displayed above the checkbox.
+ */
 @Composable
 @Preview
-fun FormatCheckBox(
+fun LabelledCheckBox(
     modifier: Modifier = Modifier,
     value: Boolean = false,
     onCheck: (Boolean) -> Unit = {},
+    text: String = "Label",
 ) {
     Column(
         modifier = modifier,
@@ -277,7 +327,7 @@ fun FormatCheckBox(
     ) {
         Text(
             modifier = Modifier.padding(horizontal = 4.dp),
-            text = "Love/Like/Learn"
+            text = text,
         )
         Checkbox(
             modifier = Modifier.padding(0.dp),
@@ -287,6 +337,16 @@ fun FormatCheckBox(
     }
 }
 
+/**
+ * This function checks the result of an operation and performs an action based on the result.
+ * If the result is false, it shows a Toast message with an error message.
+ * If the result is true, it performs a success action.
+ *
+ * @param result The result of the operation to check where true = success, and false = error.
+ * @param context The context in which to show the Toast message.
+ * @param onSuccess The function that is invoked when the result is true.
+ * @param errorMessage The message to show in the Toast when the result is false.
+ */
 private fun checkResult(
     result: Boolean,
     context: Context,
@@ -304,6 +364,13 @@ private fun checkResult(
     }
 }
 
+/**
+ * Displays a dialog for renaming a meal.
+ *
+ * @param onDismissRequest The function that is invoked when the dialog is dismissed.
+ * @param onConfirmation The function that is invoked when the user confirms the action.
+ * @param name A string that represents the current name of the meal.
+ */
 @Composable
 @Preview
 fun RenameMealDialog(
@@ -333,13 +400,23 @@ fun RenameMealDialog(
     }
 }
 
+/**
+ * Displays a dialog for editing a dish's name and rating.
+
+ * @param onDismissRequest The function that is invoked when the dialog is dismissed.
+ * @param onConfirmation The function that is invoked when the user confirms the action.
+ * @param initialName The initial name of the dish.
+ * @param initialRating The initial rating of the dish.
+ * @param saved A boolean indicating whether the dish is saved. If true, the rename form is displayed.
+ */
 @Composable
 @Preview
 fun EditDishDialog(
     onDismissRequest: () -> Unit = { },
-    onConfirmation: (String, Rating) -> Unit = { _, _ -> },
+    onConfirmation: (newName: String, newRating: Rating) -> Unit = { _, _ -> },
     initialName: String = "Dish Name",
     initialRating: Rating = Rating.LIKEIT,
+    saved: Boolean = true,
 ) {
     var name by rememberSaveable { mutableStateOf(initialName) }
     var rating by rememberSaveable { mutableStateOf(initialRating) }
@@ -354,13 +431,15 @@ fun EditDishDialog(
                 .padding(16.dp),
             shape = RoundedCornerShape(16.dp),
         ) {
-            RenameForm(
-                onValueChange = {
-                    name = it
-                },
-                titleText = R.string.edit_dish,
-                name = name
-            )
+            if (saved){
+                RenameForm(
+                    onValueChange = {
+                        name = it
+                    },
+                    titleText = R.string.edit_dish,
+                    name = name
+                )
+            }
             RatingSelector(
                 modifier = Modifier.fillMaxWidth(),
                 onRatingChange = { rating = it },
@@ -374,6 +453,13 @@ fun EditDishDialog(
     }
 }
 
+/**
+ * Displays a row of two buttons, "Cancel" and "Confirm".
+ * The buttons are centered and take up the full width of the parent.
+
+ * @param onDismissRequest The function that is invoked when the "Cancel" button is clicked.
+ * @param onConfirmation The function that is invoked when the "Confirm" button is clicked.
+ */
 @Composable
 private fun DialogButtons(
     onDismissRequest: () -> Unit,
@@ -399,6 +485,13 @@ private fun DialogButtons(
     }
 }
 
+/**
+ * Displays a form for renaming an item.
+ *
+ * @param titleText The resource ID of the title string to be displayed above the TextField.
+ * @param name The initial value of the TextField.
+ * @param onValueChange The function that is invoked when the value of the TextField changes.
+ */
 @Composable
 fun RenameForm(
     titleText: Int = R.string.rename,
@@ -422,17 +515,41 @@ fun RenameForm(
             onValueChange = onValueChange,
         )
     }
-
 }
 
+/**
+ * Displays the main body of the MealDetail screen.
+ * It includes fields for meal name, dishes, occasion, rating, and image.
+ *
+ * @param modifier Modifier to be applied to the layout.
+ * @param mealDetailUiState The UI state of the MealDetail screen.
+ * @param onMealRatingChanged The function that is invoked when the meal rating changes.
+ * @param onMealInstanceDetailsChange The function that is invoked when the meal instance details change.
+ * @param onMealNameChanged The function that is invoked when the meal name changes.
+ * @param onDishNameChanged The function that is invoked when the dish name changes.
+ * @param mealSearchResults A list of meal search results.
+ * @param dishSearchResults A list of dish search results.
+ * @param onDeleteDishClick The function that is invoked when a dish is deleted.
+ * @param onRestoreDishClick The function that is invoked when a dish is restored.
+ * @param onFindExistingMeal The function that is invoked when an existing meal is found.
+ * @param onFindExistingDish The function that is invoked when an existing dish is found.
+ * @param onDishAdded The function that is invoked when a dish is added.
+ * @param onMealSearchTermChanged The function that is invoked when the meal search term changes.
+ * @param onDishSearchTermChanged The function that is invoked when the dish search term changes.
+ * @param onMealEditClick The function that is invoked when the meal edit button is clicked.
+ * @param onDishEditClick The function that is invoked when the dish edit button is clicked.
+ * @param onUpdateImage The function that is invoked when the image is updated.
+ * @param isDuplicateCheck The function that checks if a dish is a duplicate.
+ * @param isDishSaved The function that checks if a dish is saved.
+ */
 @Composable
 fun MealDetailBody(
     modifier: Modifier = Modifier,
     mealDetailUiState: MealDetailUiState = MealDetailUiState(),
-    onDishesChanged: (MealDetails) -> Unit = {},
+    onMealRatingChanged: (Rating) -> Unit = { _: Rating -> },
     onMealInstanceDetailsChange: (MealInstanceDetails) -> Unit = {},
     onMealNameChanged: (String) -> Unit = {},
-    onDishValueChanged: (Int, String) -> Unit = { _: Int, _: String -> },
+    onDishNameChanged: (Int, String) -> Unit = { _: Int, _: String -> },
     mealSearchResults: List<MealDetails> = listOf(),
     dishSearchResults: List<DishDetails> = listOf(),
     onDeleteDishClick: (Int) -> Boolean = { _: Int -> true },
@@ -446,6 +563,7 @@ fun MealDetailBody(
     onDishEditClick: (Int) -> Unit = {},
     onUpdateImage: (String) -> Unit = {},
     isDuplicateCheck: (Int) -> Boolean = { false },
+    isDishSaved: (DishDetails) -> Boolean = { false },
 ) {
     val mealInstanceDetails = mealDetailUiState.mealInstanceDetails
     Column(
@@ -466,8 +584,8 @@ fun MealDetailBody(
         )
         DishesFields(
             modifier = Modifier,
-            onNameChange = onDishValueChanged,
-            mealDetails = mealInstanceDetails.mealDetails,
+            onNameChange = onDishNameChanged,
+            dishes = mealInstanceDetails.mealDetails.dishes,
             onDishAdded = onDishAdded,
             onDishClick = onFindExistingDish,
             searchResults = dishSearchResults,
@@ -476,6 +594,7 @@ fun MealDetailBody(
             onDishSearchTermChanged = onDishSearchTermChanged,
             onDishEditClick = onDishEditClick,
             isDuplicate = isDuplicateCheck,
+            isDishSaved = isDishSaved,
         )
         OccasionDropdown(
             modifier = Modifier
@@ -489,9 +608,7 @@ fun MealDetailBody(
         RatingSelector(
             modifier = Modifier
                 .fillMaxWidth(),
-            onRatingChange = {
-                onDishesChanged(mealInstanceDetails.mealDetails.copy(rating = it))
-            },
+            onRatingChange = onMealRatingChanged,
             rating = mealInstanceDetails.mealDetails.rating,
         )
         ImageField(
@@ -502,6 +619,15 @@ fun MealDetailBody(
     }
 }
 
+/**
+ * Saves an image to the internal storage of the device.
+ *
+ * The image is saved with a unique filename generated using a UUID, and the ".jpg" extension.
+ *
+ * @param context The context in which the function is called.
+ * @param uri The Uri of the image to be saved.
+ * @return The filename of the saved image.
+ */
 fun saveImageToInternalStorage(context: Context, uri: Uri): String {
     val fileName = UUID.randomUUID().toString() + ".jpg"
     val inputStream = context.contentResolver.openInputStream(uri)
@@ -515,6 +641,16 @@ fun saveImageToInternalStorage(context: Context, uri: Uri): String {
     return fileName
 }
 
+/**
+ * Displays an image field.
+ *
+ * If an image is provided, it displays the image with a "Remove Image" button.
+ * If no image is provided, it displays a box with a "Add Image" button.
+ *
+ * @param modifier Modifier to be applied to the layout.
+ * @param image The filename of the image to be displayed. Default is an empty string.
+ * @param onUpdateImage The function that is invoked when the image is updated. It takes the filename of the new image as a parameter.
+ */
 @Composable
 @Preview
 fun ImageField(
@@ -531,7 +667,7 @@ fun ImageField(
             }
     }
 
-    if (image.isNotBlank()) {
+    if (image.isNotBlank()) { // Display the image
         Column(
             modifier = modifier
                 .fillMaxWidth()
@@ -579,7 +715,7 @@ fun ImageField(
             contentDescription = "Meal image",
         )
     }
-    else {
+    else { // Display any empty box
         Box(
             modifier = modifier
                 .fillMaxWidth()
@@ -608,7 +744,7 @@ fun ImageField(
                     )
                 },
         )
-        {
+        {// Add image button
             Column(
                 modifier = Modifier
                     .align(Alignment.Center)
@@ -626,6 +762,13 @@ fun ImageField(
     }
 }
 
+/**
+ * Deletes an image from the internal storage of the device.
+ * If the file does not exist, no action is performed.
+ *
+ * @param context The context in which the function is called. This is used to access the file output stream.
+ * @param image The filename of the image to be deleted.
+ */
 private fun deleteImage(context: Context, image: String) {
     val file = context.getFileStreamPath(image)
     if (file.exists()) {
@@ -633,6 +776,12 @@ private fun deleteImage(context: Context, image: String) {
     }
 }
 
+/**
+ * Displays a Save button.
+ *
+ * @param onSaveClick The function that is invoked when the button is clicked.
+ * @param enabled A boolean that determines whether the button is enabled or disabled.
+ */
 @Composable
 @Preview
 fun SaveButton(
@@ -651,16 +800,27 @@ fun SaveButton(
     }
 }
 
+/**
+ * Displays a search bar that allows the user to search for a meal by name.
+ *
+ * @param modifier Modifier to be applied to the layout.
+ * @param mealDetails The details of the meal to be displayed in the MealField.
+ * @param onNameChange The function that is invoked when the name of the meal changes.
+ * @param searchResults A list of meal search results.
+ * @param onMealClick The function that is invoked when a meal is clicked.
+ * @param onSearchTermChanged The function that is invoked when the search term changes.
+ * @param onEditClick The function that is invoked when the edit icon is clicked.
+ */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 @Preview
 fun MealField(
     modifier: Modifier = Modifier,
     mealDetails: MealDetails = MealDetails(name = "mealName"),
-    onNameChange: (String) -> Unit = {},
+    onNameChange: (newName: String) -> Unit = {},
     searchResults: List<MealDetails> = emptyList(),
-    onMealClick: (String) -> Unit = {},
-    onSearchTermChanged: (String) -> Unit = {},
+    onMealClick: (mealName: String) -> Unit = {},
+    onSearchTermChanged: (newSearchTerm: String) -> Unit = {},
     onEditClick: () -> Unit = {},
 ) {
     val keyboardVisibleState by rememberUpdatedState(WindowInsets.isImeVisible)
@@ -678,92 +838,95 @@ fun MealField(
         animationSpec = tween(durationMillis = 300), label = "Animated Meal Field Height"
     )
 
-    // Reset the active state when the keyboard is closed
     LaunchedEffect(key1 = keyboardVisibleState) {
         if (!keyboardVisibleState) active = false
     }
 
-    FieldHeader(modifier = modifier, string = stringResource(id = R.string.meal_header))
+    Column(modifier = modifier.fillMaxWidth()) {
+        FieldHeader( // Title
+            modifier = modifier,
+            string = stringResource(id = R.string.meal_header),
+            style = MaterialTheme.typography.titleLarge,
+        )
 
-    Box(modifier = Modifier
-        .height(animatedHeight)
-        .padding(vertical = dimensionResource(id = paddingId)),
-    ) {
-        DockedSearchBar(
-            modifier = modifier
-                .fillMaxWidth()
-                .padding(horizontal = dimensionResource(id = paddingId))
-                .onFocusChanged { focusState ->
-                    if (!focusState.isFocused) {
-                        onMealClick(mealDetails.name)
-                        active = false
-                    }
+        Box(
+            modifier = Modifier
+                .height(animatedHeight)
+                .padding(vertical = dimensionResource(id = paddingId)),
+        ) {
+            DockedSearchBar( // Meal search bar
+                modifier = modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = dimensionResource(id = paddingId))
+                    .onFocusChanged { focusState ->
+                        if (!focusState.isFocused) {
+                            onMealClick(mealDetails.name)
+                            active = false
+                        }
+                    },
+                query = mealDetails.name,
+                onQueryChange = onNameChange,
+                onSearch = {
+                    onMealClick(mealDetails.name)
+                    active = false
                 },
-            query = mealDetails.name,
-            onQueryChange = onNameChange,
-            onSearch = {
-                onMealClick(mealDetails.name)
-                active = false
-            },
-            placeholder = {
-                when (mealDetails.name.isBlank()) {
-                    true -> {
-                        Text(text = stringResource(R.string.meal_name_req))
-                    }
-
-                    else -> {
-                        Text(text = mealDetails.name)
-                    }
-                }
-            },
-            trailingIcon = {
-                if (mealDetails.mealId != 0L) {
-                    Icon(
-                        imageVector = Icons.Default.Edit,
-                        contentDescription = stringResource(R.string.edit_meal),
-                        modifier = Modifier
-                            .clickable { onEditClick() }
-                            .padding(dimensionResource(id = R.dimen.padding_small))
+                placeholder = {
+                    Text(
+                        text = mealDetails.name.ifBlank { stringResource(R.string.meal_name_req) }
                     )
-                }
-            },
-            content = {
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(32.dp),
-                    contentPadding = PaddingValues(16.dp),
-                    modifier = Modifier
-                        .fillMaxSize(),
-                ) {
-                    items(
-                        count = searchResults.size,
-                        key = { index -> searchResults[index].mealId }
-                    ) { index ->
-                        val meal = searchResults[index]
-                        MealListItem(
-                            onMealClick = {
-                                onMealClick(it)
-                                active = false
-                            },
-                            mealDetails = meal
+                },
+                trailingIcon = { // Edit Button
+                    if (mealDetails.mealId != 0L) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = stringResource(R.string.edit_meal),
+                            modifier = Modifier
+                                .clickable { onEditClick() }
+                                .padding(dimensionResource(id = R.dimen.padding_small))
                         )
                     }
-                }
-            },
-            colors = SearchBarDefaults.colors(
-                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                dividerColor = MaterialTheme.colorScheme.secondaryContainer,
-                inputFieldColors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    disabledContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                },
+                content = { // Meal search results
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(32.dp),
+                        contentPadding = PaddingValues(16.dp),
+                        modifier = Modifier
+                            .fillMaxSize(),
+                    ) {
+                        items(
+                            count = searchResults.size,
+                            key = { index -> searchResults[index].mealId }
+                        ) { index ->
+                            val meal = searchResults[index]
+                            MealListItem(
+                                onMealClick = {
+                                    onMealClick(it)
+                                    active = false
+                                },
+                                mealDetails = meal
+                            )
+                        }
+                    }
+                },
+                colors = SearchBarDefaults.colors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    dividerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    inputFieldColors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        disabledContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    ),
                 ),
-            ),
-            active = active,
-            onActiveChange = {
-                if (active) onMealClick(mealDetails.name) else onSearchTermChanged(mealDetails.name)
-                active = it
-            },
-        )
+                active = active,
+                onActiveChange = {
+                    if
+                        (active) onMealClick(mealDetails.name)
+                    else
+                        onSearchTermChanged(mealDetails.name)
+                    active = it
+                },
+            )
+        }
     }
 }
 
@@ -774,7 +937,7 @@ fun FieldHeader(
     style: TextStyle = MaterialTheme.typography.titleLarge
 ) {
     Text(
-        modifier = modifier,
+        modifier = modifier.fillMaxWidth(),
         textAlign = TextAlign.Center,
         text = string,
         style = style,
@@ -798,19 +961,46 @@ fun MealListItem(
     }
 }
 
+/**
+ * Displays all dish-relevant content.
+ *
+ * The section includes a checkbox for toggling between the default and alternative format.
+ * In the default format, all dishes are displayed together.
+ * In the alternative format, dishes are grouped by their rating.
+ *
+ * Each group of dishes is preceded by a header that displays the description of the rating.
+ *
+ * @param modifier Modifier to be applied to the layout.
+ * @param dishes The dishes to be displayed.
+ * @param onNameChange The function that is invoked when the name of a dish changes. It takes the index of the dish and the new name as parameters.
+ * @param onDishAdded The function that is invoked when a dish is added. It takes the details of the new dish as a parameter.
+ * @param searchResults A list of dish search results.
+ * @param onDeleteDishClick The function that is invoked when a dish is deleted. It takes the index of the dish as a parameter and returns a Boolean indicating whether the deletion was successful.
+ * @param onRestoreDishClick The function that is invoked when a dish is restored. It takes the details of the dish as a parameter.
+ * @param onDishClick The function that is invoked when a dish is clicked. It takes the index of the dish and the name of the dish as parameters.
+ * @param onDishSearchTermChanged The function that is invoked when the dish search term changes. It takes the new search term as a parameter.
+ * @param onDishEditClick The function that is invoked when the dish edit button is clicked. It takes the index of the dish as a parameter.
+ * @param isDuplicate The function that checks if a dish is a duplicate. It takes the index of the dish as a parameter and returns a Boolean indicating whether the dish is a duplicate.
+ * @param isDishSaved The function that checks if a dish is saved. It takes the details of the dish as a parameter and returns a Boolean indicating whether the dish is saved.
+ */
 @Composable
+@Preview
 fun DishesFields(
-    modifier: Modifier,
-    mealDetails: MealDetails = MealDetails(),
-    onNameChange: (Int, String) -> Unit,
-    onDishAdded: (DishDetails) -> Unit = {},
-    searchResults: List<DishDetails>,
-    onDeleteDishClick: (Int) -> Boolean = { _ -> false },
-    onRestoreDishClick: (DishDetails) -> Unit = {},
-    onDishClick: (Int, String) -> Unit,
-    onDishSearchTermChanged: (String) -> Unit,
-    onDishEditClick: (Int) -> Unit,
-    isDuplicate: (Int) -> Boolean = { _ -> true },
+    modifier: Modifier = Modifier,
+    dishes: List<DishDetails> = listOf(
+        DishDetails(name = "dish1"),
+        DishDetails(name = "dish2"),
+    ),
+    onNameChange: (index: Int, newName: String) -> Unit = { _: Int, _: String -> },
+    onDishAdded: (dishToAdd: DishDetails) -> Unit = {},
+    searchResults: List<DishDetails> = listOf(),
+    onDeleteDishClick: (index: Int) -> Boolean = { _ -> false },
+    onRestoreDishClick: (dishToRestore: DishDetails) -> Unit = {},
+    onDishClick: (index: Int, String) -> Unit = { _: Int, _: String -> },
+    onDishSearchTermChanged: (newSearchTerm: String) -> Unit = {},
+    onDishEditClick: (index: Int) -> Unit = {},
+    isDuplicate: (index: Int) -> Boolean = { _ -> false },
+    isDishSaved: (dishToCheck:DishDetails) -> Boolean = { false },
 ) {
     var altFormat by remember { mutableStateOf(false) }
 
@@ -826,134 +1016,128 @@ fun DishesFields(
             modifier = Modifier.align(Alignment.CenterEnd),
             horizontalArrangement = Arrangement.End
         ) {
-            FormatCheckBox(
+            LabelledCheckBox(
                 modifier = Modifier
                     .padding(
                         vertical = 0.dp,
                         horizontal = dimensionResource(id = R.dimen.padding_medium)
                     ),
                 value = altFormat,
-                onCheck = { altFormat = it }
+                onCheck = { altFormat = it },
+                text = "Love/Like/Learn",
             )
         }
     }
 
-    if (altFormat) {
-        FieldHeader(
-            modifier = Modifier.fillMaxWidth(),
-            string = stringResource(id = R.string.dishes_subheader_learning),
-            style = MaterialTheme.typography.titleMedium
-        )
-        mealDetails.dishes.forEachIndexed { index, dish ->
-            if (dish.rating == Rating.LEARNING) {
-                DishField(
+    Column {
+        if (altFormat) {
+            Rating.entries.forEach { rating ->
+                FieldHeader(
+                    modifier = Modifier.fillMaxWidth(),
+                    string = rating.ratingEmoji.description,
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                DishFieldSection(
                     modifier = Modifier,
-                    onNameChange = { onNameChange(index, it) },
-                    onDishClick = { onDishClick(index, it) },
-                    dishDetails = dish,
-                    searchResults = searchResults.filter { it.rating == Rating.LEARNING },
-                    valid = !isDuplicate(index),
-                    onDeleteDishClick = { onDeleteDishClick(index) },
+                    dishes = dishes,
+                    onNameChange = onNameChange,
+                    onDishClick = onDishClick,
+                    searchResults = searchResults.filter { it.rating == rating },
+                    isDuplicate = isDuplicate,
+                    onDeleteDishClick = onDeleteDishClick,
                     onRestoreDishClick = onRestoreDishClick,
-                    onDishEditClick = { onDishEditClick(index) },
+                    onDishEditClick = onDishEditClick,
                     onDishSearchTermChanged = onDishSearchTermChanged,
+                    onDishAdded = onDishAdded,
+                    isDishSaved = isDishSaved,
+                    defaultRating = rating,
+                    filterByDefaultRating = true,
                 )
             }
-        }
-        AddDishButton(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(dimensionResource(id = R.dimen.padding_medium)),
-            onClick = {
-                onDishAdded(DishDetails(dishId = 0, name = "", rating = Rating.LEARNING))
-            },
-        )
-
-        FieldHeader(
-            modifier = Modifier.fillMaxWidth(),
-            string = stringResource(id = R.string.dishes_subheader_like),
-            style = MaterialTheme.typography.titleMedium
-        )
-        mealDetails.dishes.forEachIndexed { index, dish ->
-            if (dish.rating == Rating.LIKEIT) {
-                DishField(
-                    modifier = Modifier,
-                    onNameChange = { onNameChange(index, it) },
-                    onDishClick = { onDishClick(index, it) },
-                    dishDetails = dish,
-                    searchResults = searchResults.filter { it.rating == Rating.LIKEIT },
-                    valid = !isDuplicate(index),
-                    onDeleteDishClick = { onDeleteDishClick(index) },
-                    onRestoreDishClick = onRestoreDishClick,
-                    onDishEditClick = { onDishEditClick(index) },
-                    onDishSearchTermChanged = onDishSearchTermChanged,
-                )
-            }
-        }
-        AddDishButton(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(dimensionResource(id = R.dimen.padding_medium)),
-            onClick = {
-                onDishAdded(DishDetails(dishId = 0, name = "", rating = Rating.LIKEIT))
-            },
-        )
-
-        FieldHeader(
-            modifier = Modifier.fillMaxWidth(),
-            string = stringResource(id = R.string.dishes_subheader_love),
-            style = MaterialTheme.typography.titleMedium
-        )
-        mealDetails.dishes.forEachIndexed { index, dish ->
-            if (dish.rating == Rating.LOVEIT) {
-                DishField(
-                    modifier = Modifier,
-                    onNameChange = { onNameChange(index, it) },
-                    onDishClick = { onDishClick(index, it) },
-                    dishDetails = dish,
-                    searchResults = searchResults.filter { it.rating == Rating.LOVEIT },
-                    valid = !isDuplicate(index),
-                    onDeleteDishClick = { onDeleteDishClick(index) },
-                    onRestoreDishClick = onRestoreDishClick,
-                    onDishEditClick = { onDishEditClick(index) },
-                    onDishSearchTermChanged = onDishSearchTermChanged,
-                )
-            }
-        }
-        AddDishButton(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(dimensionResource(id = R.dimen.padding_medium)),
-            onClick = {
-                onDishAdded(DishDetails(dishId = 0, name = "", rating = Rating.LOVEIT))
-            },
-        )
-    }
-    else
-    {
-        mealDetails.dishes.forEachIndexed { index, dish ->
-            DishField(
+        } else {
+            DishFieldSection(
                 modifier = Modifier,
-                onNameChange = { onNameChange(index, it) },
-                onDishClick = { onDishClick(index, it) },
-                dishDetails = dish,
+                dishes = dishes,
+                onNameChange = onNameChange,
+                onDishClick = onDishClick,
                 searchResults = searchResults,
-                valid = !isDuplicate(index),
-                onDeleteDishClick = { onDeleteDishClick(index) },
+                isDuplicate = isDuplicate,
+                onDeleteDishClick = onDeleteDishClick,
                 onRestoreDishClick = onRestoreDishClick,
-                onDishEditClick = { onDishEditClick(index) },
+                onDishEditClick = onDishEditClick,
                 onDishSearchTermChanged = onDishSearchTermChanged,
+                onDishAdded = onDishAdded,
+                isDishSaved = isDishSaved,
+                defaultRating = Rating.LIKEIT,
             )
         }
-        AddDishButton(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(dimensionResource(id = R.dimen.padding_medium)),
-            onClick = {
-                onDishAdded(DishDetails(dishId = 0, name = "", rating = Rating.LIKEIT))
-            },
+    }
+}
+
+/**
+ * Displays a DishField for every dish in the list.
+ *
+ * If the filterByDefaultRating flag is set to true, only dishes with the default rating are shown.
+ *
+ * @param modifier Modifier to be applied to the layout.
+ * @param dishes List of DishDetails objects representing the dishes to be displayed.
+ * @param onNameChange The function that is invoked when the name of a dish changes.
+ * @param onDishClick The function that is invoked when a dish is clicked.
+ * @param searchResults A list of DishDetails objects representing the search results.
+ * @param isDuplicate The function that checks if a dish is a duplicate.
+ * @param onDeleteDishClick The function that is invoked when a dish is deleted.
+ * @param onRestoreDishClick The function that is invoked when a dish is restored.
+ * @param onDishEditClick The function that is invoked when the dish edit button is clicked.
+ * @param onDishSearchTermChanged The function that is invoked when the dish search term changes.
+ * @param onDishAdded The function that is invoked when a dish is added.
+ * @param isDishSaved The function that checks if a dish is saved.
+ * @param defaultRating The default rating to be used when filtering dishes by rating.
+ * @param filterByDefaultRating A Boolean that determines whether dishes should be filtered by the default rating.
+ */
+@Composable
+private fun DishFieldSection(
+    modifier: Modifier = Modifier,
+    dishes: List<DishDetails>,
+    onNameChange: (Int, String) -> Unit,
+    onDishClick: (Int, String) -> Unit,
+    searchResults: List<DishDetails>,
+    isDuplicate: (Int) -> Boolean,
+    onDeleteDishClick: (Int) -> Boolean,
+    onRestoreDishClick: (DishDetails) -> Unit,
+    onDishEditClick: (Int) -> Unit,
+    onDishSearchTermChanged: (String) -> Unit,
+    onDishAdded: (DishDetails) -> Unit,
+    isDishSaved: (DishDetails) -> Boolean = { false },
+    defaultRating: Rating = Rating.LIKEIT,
+    filterByDefaultRating: Boolean = false,
+) {
+    dishes.forEachIndexed { index, dish ->
+        if (filterByDefaultRating && dish.rating != defaultRating) return@forEachIndexed
+        DishField(
+            modifier = modifier,
+            onNameChange = { onNameChange(index, it) },
+            onDishClick = { onDishClick(index, it) },
+            dishDetails = dish,
+            searchResults = if (filterByDefaultRating) searchResults.filter {
+                it.rating == dish.rating
+            }
+            else searchResults ,
+            valid = !isDuplicate(index),
+            onDeleteDishClick = { onDeleteDishClick(index) },
+            onRestoreDishClick = onRestoreDishClick,
+            onDishEditClick = { onDishEditClick(index) },
+            onDishSearchTermChanged = onDishSearchTermChanged,
+            isDishSaved = isDishSaved,
         )
     }
+    AddDishButton(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(dimensionResource(id = R.dimen.padding_medium)),
+        onClick = {
+            onDishAdded(DishDetails(dishId = 0, name = "", rating = defaultRating))
+        },
+    )
 }
 
 @Composable
@@ -969,6 +1153,21 @@ fun AddDishButton(
     }
 }
 
+/**
+ * Displays a UI component for displaying and managing a dish and searching for other dishes.
+ *
+ * @param modifier Modifier to be applied to the layout.
+ * @param onNameChange The function that is invoked when the name of the dish changes.
+ * @param onDishEditClick The function that is invoked when the dish edit icon is clicked.
+ * @param onDishClick The function that is invoked when a dish is clicked.
+ * @param dishDetails The details of the dish to be displayed in the DishField.
+ * @param valid A boolean indicating whether the dish is valid.
+ * @param searchResults A list of dish search results.
+ * @param onDeleteDishClick The function that is invoked when the dish delete icon is clicked.
+ * @param onRestoreDishClick The function that is invoked when a deleted dish is restored.
+ * @param onDishSearchTermChanged The function that is invoked when the dish search term changes.
+ * @param isDishSaved The function that checks if a dish is saved.
+ */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 @Preview
@@ -983,6 +1182,7 @@ fun DishField(
     onDeleteDishClick: () -> Boolean = { false },
     onRestoreDishClick: (DishDetails) -> Unit = {},
     onDishSearchTermChanged: (String) -> Unit = { _ -> },
+    isDishSaved: (DishDetails) -> Boolean = { false },
 ) {
     val keyboardVisibleState by rememberUpdatedState(WindowInsets.isImeVisible)
     var active by remember { mutableStateOf(false) }
@@ -1037,7 +1237,6 @@ fun DishField(
                         true -> {
                             Text(text = stringResource(R.string.dish_name_req))
                         }
-
                         else -> {
                             if (deleted) {
                                 Text(
@@ -1048,15 +1247,16 @@ fun DishField(
                         }
                     }
                 },
-                trailingIcon = {
-                    if (dishDetails.dishId != 0L)
+                trailingIcon = { // Edit Button
+                    if (dishDetails.name.isNotBlank() && !deleted) {
                         Icon(
                             modifier = Modifier.clickable { onDishEditClick() },
                             imageVector = Icons.Default.Edit,
                             contentDescription = "Edit name of dish $dishDetails.name Button",
                         )
+                    }
                 },
-                leadingIcon = {
+                leadingIcon = { // Delete/Restore button
                     Icon(
                         modifier = Modifier.clickable {
                             deleted = when (deleted) {
@@ -1076,7 +1276,7 @@ fun DishField(
                         contentDescription = "Delete dish " + dishDetails.name + " Button",
                     )
                 },
-                content = {
+                content = { // Dish search results
                     LazyColumn(
                         verticalArrangement = Arrangement.spacedBy(32.dp),
                         contentPadding = PaddingValues(16.dp),
@@ -1100,16 +1300,35 @@ fun DishField(
                 },
                 enabled = !deleted,
                 colors = when (valid) {
-                    true -> SearchBarDefaults.colors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        dividerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        inputFieldColors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            unfocusedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            disabledContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        ),
-                    )
-
+                    true -> {
+                        if (!isDishSaved(dishDetails)) {
+                            SearchBarDefaults.colors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                dividerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                inputFieldColors = OutlinedTextFieldDefaults.colors(
+                                    focusedContainerColor =
+                                        MaterialTheme.colorScheme.secondaryContainer,
+                                    unfocusedContainerColor =
+                                        MaterialTheme.colorScheme.secondaryContainer,
+                                    disabledContainerColor =
+                                        MaterialTheme.colorScheme.secondaryContainer,
+                                ),
+                            )
+                        } else {
+                            SearchBarDefaults.colors(
+                                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                dividerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                inputFieldColors = OutlinedTextFieldDefaults.colors(
+                                    focusedContainerColor =
+                                        MaterialTheme.colorScheme.tertiaryContainer,
+                                    unfocusedContainerColor =
+                                        MaterialTheme.colorScheme.tertiaryContainer,
+                                    disabledContainerColor =
+                                        MaterialTheme.colorScheme.tertiaryContainer,
+                                ),
+                            )
+                        }
+                    }
                     else -> SearchBarDefaults.colors(
                         containerColor = MaterialTheme.colorScheme.errorContainer,
                         dividerColor = MaterialTheme.colorScheme.errorContainer,
@@ -1122,8 +1341,8 @@ fun DishField(
                 },
                 active = active,
                 onActiveChange = {
-                    if
-                        (active) onDishClick(dishDetails.name)
+                    if (active)
+                        onDishClick(dishDetails.name)
                     else
                         onDishSearchTermChanged(dishDetails.name)
                     active = it
@@ -1137,7 +1356,7 @@ fun DishField(
 fun DishListItem(
     dishDetails: DishDetails,
     modifier: Modifier = Modifier,
-    onDishClick: () -> Unit
+    onDishClick: () -> Unit,
 ) {
     Row(
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -1150,6 +1369,13 @@ fun DishListItem(
     }
 }
 
+/**
+ * Displays a UI component for viewing the current rating and selecting a new rating.
+ *
+ * @param modifier Modifier to be applied to the layout.
+ * @param onRatingChange A lambda function that is invoked when a rating is selected. It takes the selected rating as a parameter.
+ * @param rating The current rating.
+ */
 @Composable
 fun RatingSelector(
     modifier: Modifier,
