@@ -4,7 +4,9 @@ import android.content.Context
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.Companion.isPhotoPickerAvailable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
@@ -52,7 +54,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -100,6 +101,7 @@ import com.jimmy.parentsmealplanner.ui.shared.TopBar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.UUID
 
 
 object MealDetailDest : NavigationDestination {
@@ -127,28 +129,28 @@ fun MealDetail(
     val mealDetailUiState = viewModel.mealDetailUiState
     val mealSearchResults by viewModel.filteredMealSearchResults.collectAsStateWithLifecycle()
     val dishSearchResults by viewModel.filteredDishSearchResults.collectAsStateWithLifecycle()
-    val showRenameMealDialog = rememberSaveable { mutableStateOf(false) }
-    val showEditDishDialog = rememberSaveable { mutableStateOf(false) }
-    val showUnsavedChangesDialog = rememberSaveable { mutableStateOf(false) }
-    val targetDishIndex = rememberSaveable { mutableIntStateOf(0) }
+    var showRenameMealDialog by rememberSaveable { mutableStateOf(false) }
+    var showEditDishDialog by rememberSaveable { mutableStateOf(false) }
+    var showUnsavedChangesDialog by rememberSaveable { mutableStateOf(false) }
+    var targetDishIndex by rememberSaveable { mutableIntStateOf(0) }
     val context = LocalContext.current
 
     // Show the dialog when the state variable is true
-    if (showUnsavedChangesDialog.value) {
+    if (showUnsavedChangesDialog) {
         AlertDialog(
-            onDismissRequest = { showUnsavedChangesDialog.value = false },
+            onDismissRequest = { showUnsavedChangesDialog = false },
             title = { Text("Discard Changes?") },
             text = { Text("Any unsaved changes will be lost.") },
             confirmButton = {
                 TextButton(onClick = {
-                    showUnsavedChangesDialog.value = false
+                    showUnsavedChangesDialog = false
                     if (!canNavigateBack || !navigateBack()) onNavigateUp()
                 }) {
                     Text("Yes")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showUnsavedChangesDialog.value = false }) {
+                TextButton(onClick = { showUnsavedChangesDialog = false }) {
                     Text("No")
                 }
             }
@@ -156,19 +158,19 @@ fun MealDetail(
     }
 
     when {
-        showRenameMealDialog.value -> {
+        showRenameMealDialog -> {
             RenameMealDialog(
-                onDismissRequest = { showRenameMealDialog.value = false },
+                onDismissRequest = { showRenameMealDialog = false },
                 onConfirmation = {
                     viewModel.viewModelScope.launch {
                         val result = viewModel.updateMealName(
                             newName = it,
                         )
                         checkResult(
-                            result,
-                            context,
-                            showRenameMealDialog,
-                            "A meal with that name already exists."
+                            result = result,
+                            context = context,
+                            onSuccess = { showRenameMealDialog = false },
+                            errorMessage = "A meal with that name already exists."
                         )
                     }
                 },
@@ -178,26 +180,26 @@ fun MealDetail(
     }
 
     when {
-        showEditDishDialog.value -> {
+        showEditDishDialog -> {
             EditDishDialog(
-                onDismissRequest = { showEditDishDialog.value = false },
+                onDismissRequest = { showEditDishDialog = false },
                 onConfirmation = { newName, newRating ->
                     viewModel.viewModelScope.launch {
                         val result = viewModel.updateDish(
-                            index = targetDishIndex.intValue,
+                            index = targetDishIndex,
                             newName = newName,
                             newRating = newRating,
                         )
                         checkResult(
-                            result,
-                            context,
-                            showEditDishDialog,
-                            "A dish with that name already exists."
+                            result = result,
+                            context = context,
+                            onSuccess = { showEditDishDialog = false },
+                            errorMessage = "A dish with that name already exists."
                         )
                     }
                 },
                 initialName = mealDetailUiState.mealInstanceDetails.mealDetails
-                    .dishes[targetDishIndex.intValue].name,
+                    .dishes[targetDishIndex].name,
             )
         }
     }
@@ -213,7 +215,7 @@ fun MealDetail(
                 ),
                 canNavigateBack = canNavigateBack,
                 navigateUp = {
-                    showUnsavedChangesDialog.value = true
+                    showUnsavedChangesDialog = true
                 },
                 onThemeToggle = { mainViewModel.changeTheme(it) },
             )
@@ -250,10 +252,10 @@ fun MealDetail(
                 onFindExistingDish = viewModel::findExistingDish,
                 onMealSearchTermChanged = viewModel::onMealSearchTermChange,
                 onDishSearchTermChanged = viewModel::onDishSearchTermChange,
-                onMealEditClick = { showRenameMealDialog.value = true },
+                onMealEditClick = { showRenameMealDialog = true },
                 onDishEditClick = {
-                    targetDishIndex.intValue = it
-                    showEditDishDialog.value = true
+                    targetDishIndex = it
+                    showEditDishDialog = true
                 },
                 onUpdateImage = viewModel::updateImage,
                 isDuplicateCheck = viewModel::isDuplicate,
@@ -288,7 +290,7 @@ fun FormatCheckBox(
 private fun checkResult(
     result: Boolean,
     context: Context,
-    showRenameDishDialog: MutableState<Boolean>,
+    onSuccess: () -> Unit,
     errorMessage: String,
 ) {
     if (!result) {
@@ -298,7 +300,7 @@ private fun checkResult(
             Toast.LENGTH_SHORT
         ).show()
     } else {
-        showRenameDishDialog.value = false
+        onSuccess()
     }
 }
 
@@ -494,28 +496,42 @@ fun MealDetailBody(
         )
         ImageField(
             modifier = Modifier,
-            imageSrc = mealInstanceDetails.mealDetails.imgSrc,
+            image = mealInstanceDetails.mealDetails.imgSrc ?: "",
             onUpdateImage = onUpdateImage,
         )
     }
+}
+
+fun saveImageToInternalStorage(context: Context, uri: Uri): String {
+    val fileName = UUID.randomUUID().toString() + ".jpg"
+    val inputStream = context.contentResolver.openInputStream(uri)
+    val outputStream = context.openFileOutput(fileName, Context.MODE_PRIVATE)
+    inputStream?.use { input ->
+        outputStream.use { output ->
+            input.copyTo(output)
+        }
+    }
+
+    return fileName
 }
 
 @Composable
 @Preview
 fun ImageField(
     modifier: Modifier = Modifier,
-    imageSrc: String? = null,
+    image: String = "",
     onUpdateImage: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
     val pickImageContract = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()) { uri: Uri? ->
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
             if (uri != null) {
-                onUpdateImage(uri.toString())
+                onUpdateImage(saveImageToInternalStorage(context = context, uri = uri))
             }
     }
 
-    if (!imageSrc.isNullOrBlank()) {
+    if (image.isNotBlank()) {
         Column(
             modifier = modifier
                 .fillMaxWidth()
@@ -524,18 +540,15 @@ fun ImageField(
             Button(
                 modifier = Modifier
                     .align(Alignment.CenterHorizontally),
-                onClick = { onUpdateImage("") },
+                onClick = {
+                    deleteImage(context, image)
+                    onUpdateImage("")
+                },
             ) {
                 Text(text = "Remove Image")
             }
         }
         AsyncImage(
-            model = ImageRequest.Builder(context)
-                .data(imageSrc)
-                .crossfade(true)
-                .build(),
-            contentScale = ContentScale.Crop,
-            contentDescription = null,
             modifier = modifier
                 .clip(
                     RoundedCornerShape(
@@ -544,7 +557,26 @@ fun ImageField(
                 )
                 .fillMaxWidth()
                 .padding(dimensionResource(id = R.dimen.padding_medium))
-                .clickable { pickImageContract.launch("image/*") },
+                .clickable {
+                    if (isPhotoPickerAvailable(context)) {
+                        pickImageContract.launch(
+                            PickVisualMediaRequest(
+                                mediaType = ActivityResultContracts.PickVisualMedia.ImageOnly
+                            ))
+                    } else {
+                        Toast.makeText(
+                            context,
+                            "Not supported on this device",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                },
+            model = ImageRequest.Builder(context)
+                .data(context.getFileStreamPath(image))
+                .crossfade(true)
+                .build(),
+            contentScale = ContentScale.Crop,
+            contentDescription = "Meal image",
         )
     }
     else {
@@ -553,7 +585,18 @@ fun ImageField(
                 .fillMaxWidth()
                 .padding(dimensionResource(id = R.dimen.padding_medium))
                 .height(200.dp)
-                .clickable { pickImageContract.launch("image/*") }
+                .clickable { if (isPhotoPickerAvailable(context)) {
+                    pickImageContract.launch(
+                        PickVisualMediaRequest(
+                            mediaType = ActivityResultContracts.PickVisualMedia.ImageOnly
+                        ))
+                } else {
+                    Toast.makeText(
+                        context,
+                        "Not supported on this device",
+                        Toast.LENGTH_LONG
+                    ).show()
+                } }
                 .drawBehind {
                     drawRoundRect(
                         color = Color.Gray,
@@ -581,7 +624,13 @@ fun ImageField(
             }
         }
     }
+}
 
+private fun deleteImage(context: Context, image: String) {
+    val file = context.getFileStreamPath(image)
+    if (file.exists()) {
+        file.delete()
+    }
 }
 
 @Composable
@@ -614,7 +663,7 @@ fun MealField(
     onSearchTermChanged: (String) -> Unit = {},
     onEditClick: () -> Unit = {},
 ) {
-    val keyboardVisibleState = rememberUpdatedState(WindowInsets.isImeVisible)
+    val keyboardVisibleState by rememberUpdatedState(WindowInsets.isImeVisible)
     var active by remember { mutableStateOf(false) }
     val paddingId = R.dimen.padding_medium
     val minHeight = 56.dp + (dimensionResource(id = paddingId)*2)
@@ -630,8 +679,8 @@ fun MealField(
     )
 
     // Reset the active state when the keyboard is closed
-    LaunchedEffect(key1 = keyboardVisibleState.value) {
-        if (!keyboardVisibleState.value) active = false
+    LaunchedEffect(key1 = keyboardVisibleState) {
+        if (!keyboardVisibleState) active = false
     }
 
     FieldHeader(modifier = modifier, string = stringResource(id = R.string.meal_header))
@@ -763,7 +812,7 @@ fun DishesFields(
     onDishEditClick: (Int) -> Unit,
     isDuplicate: (Int) -> Boolean = { _ -> true },
 ) {
-    val altFormat = remember { mutableStateOf(false) }
+    var altFormat by remember { mutableStateOf(false) }
 
     Box(
         modifier = modifier.fillMaxWidth(),
@@ -783,13 +832,13 @@ fun DishesFields(
                         vertical = 0.dp,
                         horizontal = dimensionResource(id = R.dimen.padding_medium)
                     ),
-                value = altFormat.value,
-                onCheck = { altFormat.value = it }
+                value = altFormat,
+                onCheck = { altFormat = it }
             )
         }
     }
 
-    if (altFormat.value) {
+    if (altFormat) {
         FieldHeader(
             modifier = Modifier.fillMaxWidth(),
             string = stringResource(id = R.string.dishes_subheader_learning),
@@ -935,7 +984,7 @@ fun DishField(
     onRestoreDishClick: (DishDetails) -> Unit = {},
     onDishSearchTermChanged: (String) -> Unit = { _ -> },
 ) {
-    val keyboardVisibleState = rememberUpdatedState(WindowInsets.isImeVisible)
+    val keyboardVisibleState by rememberUpdatedState(WindowInsets.isImeVisible)
     var active by remember { mutableStateOf(false) }
     var deleted by remember { mutableStateOf(false) }
     val horizontalPaddingId = R.dimen.padding_medium
@@ -954,8 +1003,8 @@ fun DishField(
     )
 
     // Reset the active state when the keyboard is closed
-    LaunchedEffect(key1 = keyboardVisibleState.value) {
-        if (!keyboardVisibleState.value) active = false
+    LaunchedEffect(key1 = keyboardVisibleState) {
+        if (!keyboardVisibleState) active = false
     }
 
     ProvideTextStyle(
