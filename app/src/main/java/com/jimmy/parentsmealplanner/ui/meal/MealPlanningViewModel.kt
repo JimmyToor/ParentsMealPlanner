@@ -9,11 +9,16 @@ import com.jimmy.parentsmealplanner.ui.shared.toMealInstanceDetails
 import com.jimmy.parentsmealplanner.ui.shared.toUser
 import com.jimmy.parentsmealplanner.ui.shared.toUserDetails
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -31,182 +36,181 @@ private const val FIRST_USER_ID = 1L
 /**
  * [ViewModel] for the meal planning screen.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class MealPlanningViewModel @Inject constructor(
     private val mealRepository: MealRepository,
 ) : ViewModel() {
-    private var _mealUiState = MutableStateFlow(MealUiState())
-    val mealUiState: StateFlow<MealUiState> = _mealUiState
-
-    private var _dateUiState = MutableStateFlow(DateUiState())
-    val dateUiState: StateFlow<DateUiState> = _dateUiState
-
-    private var _userUiState = MutableStateFlow(UserUiState())
-    val userUiState: StateFlow<UserUiState> = _userUiState
-
+    private val selectedUser: MutableStateFlow<Long?> = MutableStateFlow(null)
+    private val selectedDay: MutableStateFlow<LocalDate?> =
+        MutableStateFlow(Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date)
+    private val targetUserDetails: MutableStateFlow<UserDetails> = MutableStateFlow(UserDetails())
     val loading = MutableStateFlow(true)
 
+    val userUiState: StateFlow<UserUiState> = selectedUser.flatMapLatest (::userUiStateOfUserId)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(TIMEOUT_MILLIS),
+            initialValue = UserUiState(),
+        )
+
+    val mealUiState: StateFlow<MealUiState> = selectedDay.flatMapLatest (::mealUiStateOfDate)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(TIMEOUT_MILLIS),
+            initialValue = MealUiState(),
+        )
+
+
     /**
-     * Initializes the [MealPlanningViewModel] and collects the [dateUiState] to get the meals for the
-     * selected day. The [mealUiState] is updated when the MealsWithDishes flow updates or when
-     * [dateUiState] changes, i.e. when the selected day changes.
-     * Also initializes the [userUiState] and inserts an initial [User] to the database if it doesn't exist.
+     * Creates a [Flow] of [MealUiState] containing all the [MealInstanceDetails] for the selected date.
+     * The [Flow] is then shared in the [viewModelScope] and will remain active as long as there are active subscribers.
+     *
+     * @param date The selected date for which the [MealUiState] is to be created. If null, an empty [MealUiState] is returned.
+     * @return A [Flow] of [MealUiState] based on the provided date.
+     */
+    private fun mealUiStateOfDate(date: LocalDate?): Flow<MealUiState> {
+        if (date == null) return flowOf(MealUiState())
+        return mealRepository.getMealsWithDishesAndInstancesInDateRangeStream(
+            dateStart = getFirstDayOfSurroundingWeek(date),
+            dateEnd = getLastDayOfSurroundingWeek(date),
+        ).filterNotNull()
+            .map { mealsWithDishesAndAllInstances -> MealUiState(
+                mealInstanceDetails = mealsWithDishesAndAllInstances.flatMap {
+                        mealWithDishesAndInstances ->
+                    mealWithDishesAndInstances.toMealInstanceDetails()
+                },
+                selectedDay = date
+            )}
+    }
+
+    /**
+     * Creates a [Flow] of [UserUiState] based on the provided user ID as the selected user.
+     * The resulting [UserUiState] contains the details of the selected user, all users, and the target user.
+     * The [Flow] is then shared in the [viewModelScope] and will remain active as long as there are active subscribers.
+     *
+     * The [Flow] is updated whenever targetUserDetails or the list of all users in the [mealRepository] changes.
+     *
+     * If no users are found in the meal repository, a new user is inserted with the ID [FIRST_USER_ID] and a name "User #FIRST_USER_ID".
+     *
+     * @param userId The ID of the user for which the [UserUiState] is to be created. If null, a new user is inserted into the [mealRepository] and its ID is assigned to [selectedUser].
+     * @return A [Flow] of [UserUiState] based on the provided user ID.
+     */
+    private suspend fun userUiStateOfUserId(userId: Long?): Flow<UserUiState> {
+        if (userId == null) {
+            if (mealRepository.getAllUsers().isEmpty()) {
+                mealRepository.insertUser(
+                    UserDetails(id = FIRST_USER_ID, name = "User #$FIRST_USER_ID").toUser()
+                )
+            }
+            selectedUser.value = mealRepository.getAllUsers().first().userId
+        }
+
+        return combine(
+            targetUserDetails,
+            mealRepository.getAllUsersStream(),
+        ) { targetUserDetails, allUsers ->
+            UserUiState(
+                selectedUserDetails = allUsers.first { it.userId == userId }.toUserDetails(),
+                allUsersDetails = allUsers.map { it.toUserDetails() },
+                targetUserDetails = targetUserDetails,
+            )
+        }
+    }
+
+
+    /**
+     * Initializes the data for the ViewModel.
+     * Sets the loading state to true until users are loaded.
      */
     fun initializeData() {
+        loading.value = true
+
         viewModelScope.launch {
-            loading.value = true
-            initializeUser()
-            collectUsers()
-            collectMeals()
+            userUiState.first { it.allUsersDetails.isNotEmpty() }
             loading.value = false
         }
     }
 
-    private suspend fun initializeUser() {
-        when {
-            mealRepository.getUser(FIRST_USER_ID) == null -> {
-                mealRepository.insertUser(
-                    UserDetails(id = FIRST_USER_ID, name = "User #$FIRST_USER_ID").toUser(),
-                )
-            }
-        }
-    }
-
-    private suspend fun collectUsers() =
-        viewModelScope.launch {
-            mealRepository.getAllUsersStream().collectLatest { users ->
-                val allUsersDetails = users.map { it.toUserDetails() }
-
-                _userUiState.value =
-                    userUiState.value.copy(
-                        allUsersDetails = allUsersDetails,
-                        selectedUserDetails =
-                            if (_userUiState.value.selectedUserDetails.id == 0L) {
-                                allUsersDetails.first { it.id == 1L }
-                            } else {
-                                allUsersDetails.first {
-                                    it.id == _userUiState.value.selectedUserDetails.id
-                                }
-                            },
-                    )
-            }
-        }
-
-    private suspend fun collectMeals() =
-        viewModelScope.launch {
-            _dateUiState.collectLatest { dateUiState ->
-                getMealsWithDishesStreamForSurroundingWeek(dateUiState.selectedDay).collectLatest {
-                        mealUiState -> _mealUiState.value = mealUiState
-                }
-            }
-    }
-
-    fun updateSelectedDay(selectedDay: LocalDate) {
-        _dateUiState.value = DateUiState(selectedDay = selectedDay)
+    fun updateSelectedDay(newSelectedDay: LocalDate) {
+        selectedDay.value = newSelectedDay
     }
 
     /**
      * Increments the selected day in the dateUiState by the given number of days.
      *
-     * This function increments the selected day in the [_dateUiState] by adding a specified number of days to it.
-     * The incremented selected day is then wrapped in a new [DateUiState] object and assigned back to [_dateUiState].
-     *
      * @param days The number of days to add to the current selected day. Can be negative to subtract days.
      */
     fun incrementSelectedDay(days: Int) {
-        _dateUiState.value =
-            DateUiState(
-                selectedDay = _dateUiState.value.selectedDay.plus(DatePeriod(days = days))
-            )
+        selectedDay.value?.let { selectedDay.value = it.plus(DatePeriod(days = days)) }
     }
 
-    fun updateUserUiState(
-        selectedUserDetails: UserDetails = userUiState.value.selectedUserDetails,
-        allUsersDetails: List<UserDetails> = userUiState.value.allUsersDetails,
-        targetUserDetails: UserDetails = userUiState.value.targetUserDetails,
-    ) {
-        _userUiState.value =
-            userUiState.value.copy(
-                selectedUserDetails = selectedUserDetails,
-                allUsersDetails = allUsersDetails,
-                targetUserDetails = targetUserDetails,
-            )
-    }
-
+    /**
+     * Updates the selected user in the userUiState.
+     */
     fun updateSelectedUser(userId: Long) {
-        updateUserUiState(
-            selectedUserDetails = userUiState.value.allUsersDetails.first { it.id == userId },
-        )
+        selectedUser.value = userId
     }
 
-    fun updateTargetUser(targetUserDetails: UserDetails) {
-        updateUserUiState(
-            targetUserDetails = targetUserDetails,
-        )
+    /**
+     * Updates the target user in the userUiState.
+     */
+    fun updateTargetUser(newTargetUserDetails: UserDetails = UserDetails()) {
+        targetUserDetails.value = newTargetUserDetails
     }
 
-    fun addUser() {
-        updateUserUiState(
-            targetUserDetails = UserDetails(),
-        )
-    }
-
-    fun editUser(userDetails: UserDetails) {
-        updateUserUiState(
-            targetUserDetails = userDetails,
-        )
-    }
-
-    fun saveTargetUser() {
+    /**
+     * Saves/updates the [userUiState]'s target user in the meal repository.
+     *
+     * @return True if the user was saved successfully.
+     *
+     * False if a user with the same name already exists.
+     */
+    suspend fun saveTargetUser(): Boolean {
         val newUserDetails = userUiState.value.targetUserDetails
-        var id = newUserDetails.id
-        viewModelScope.launch {
-            when (newUserDetails.id) {
-                0L -> {
-                    id = mealRepository.insertUser(newUserDetails.toUser())
-                }
-                else -> mealRepository.updateUser(newUserDetails.toUser())
-            }
 
-            updateTargetUser(userUiState.value.targetUserDetails.copy(id = id))
-            when (_userUiState.value.selectedUserDetails.id) {
-                id -> updateSelectedUser(id)
-            }
+        if (userUiState.value.allUsersDetails.any { it.name == newUserDetails.name }) {
+            return false // Username already exists
         }
+
+        var id = newUserDetails.id
+
+        when (newUserDetails.id) {
+            0L -> {
+                id = mealRepository.insertUser(newUserDetails.toUser())
+            }
+            else -> mealRepository.updateUser(newUserDetails.toUser())
+        }
+
+        updateTargetUser(userUiState.value.targetUserDetails.copy(id = id))
+        when (userUiState.value.selectedUserDetails.id) {
+            id -> updateSelectedUser(id)
+        }
+
+        return true
     }
 
+    /**
+     * Deletes the provided user from the meal repository.
+     *
+     * @param userDetails The user to delete.
+     */
     fun deleteUser(userDetails: UserDetails) {
         viewModelScope.launch {
             mealRepository.deleteUser(userDetails.toUser())
         }
     }
 
+
+    /**
+     * Deletes the [MealInstance] with the provided id from the meal repository.
+     *
+     * @param instanceId The ID of the instance to delete.
+     */
     fun deleteInstance(instanceId: Long) {
         viewModelScope.launch {
             mealRepository.deleteMealInstance(instanceId)
         }
-    }
-
-    private fun getMealsWithDishesStreamForSurroundingWeek(
-        selectedDay: LocalDate = Clock.System.now().toLocalDateTime(
-            TimeZone.currentSystemDefault()
-        ).date
-    ): StateFlow<MealUiState> {
-        return mealRepository.getMealsWithDishesAndInstancesInDateRangeStream(
-            dateStart = getFirstDayOfSurroundingWeek(selectedDay),
-            dateEnd = getLastDayOfSurroundingWeek(selectedDay),
-        ).filterNotNull()
-            .map { mealsWithDishesAndAllInstances -> MealUiState(
-                mealInstanceDetails = mealsWithDishesAndAllInstances.flatMap {
-                    mealWithDishesAndInstances ->
-                        mealWithDishesAndInstances.toMealInstanceDetails()
-                }
-            )}
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(TIMEOUT_MILLIS),
-                initialValue = MealUiState(),
-            )
     }
 
     companion object {
@@ -216,9 +220,6 @@ class MealPlanningViewModel @Inject constructor(
 
 data class MealUiState(
     val mealInstanceDetails: List<MealInstanceDetails> = listOf(),
-)
-
-data class DateUiState(
     val selectedDay: LocalDate =
         Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date,
 ) {
@@ -226,9 +227,9 @@ data class DateUiState(
 }
 
 data class UserUiState(
-    val selectedUserDetails: UserDetails = UserDetails(),
+    val selectedUserDetails: UserDetails = UserDetails(), // The current user in use
     val allUsersDetails: List<UserDetails> = listOf(),
-    val targetUserDetails: UserDetails = UserDetails(),
+    val targetUserDetails: UserDetails = UserDetails(), // The user that is being edited
 )
 
 /**

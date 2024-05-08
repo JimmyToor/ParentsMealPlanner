@@ -66,6 +66,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -76,6 +77,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
 import com.jimmy.parentsmealplanner.R
 import com.jimmy.parentsmealplanner.ui.nav.NavigationDestination
 import com.jimmy.parentsmealplanner.ui.shared.DishDetails
@@ -90,6 +92,7 @@ import com.jimmy.parentsmealplanner.ui.shared.TopBar
 import com.jimmy.parentsmealplanner.ui.shared.UserDetails
 import com.jimmy.parentsmealplanner.ui.theme.LocalDarkTheme
 import com.jimmy.parentsmealplanner.ui.theme.ParentsMealPlannerTheme
+import com.jimmy.parentsmealplanner.util.checkResult
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
@@ -128,13 +131,14 @@ fun MealPlanner(
     mainViewModel: MainViewModel = hiltViewModel<MainViewModel>(),
 ) {
     val mealUiState by viewModel.mealUiState.collectAsStateWithLifecycle()
-    val dateUiState by viewModel.dateUiState.collectAsStateWithLifecycle()
     val userUiState by viewModel.userUiState.collectAsStateWithLifecycle()
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     val showUserDetailsDialog = rememberSaveable { mutableStateOf(false) }
     val isLoading by viewModel.loading.collectAsState()
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val targetOriginalName = remember { mutableStateOf("") }
 
     LaunchedEffect(key1 = true) {
         viewModel.initializeData()
@@ -147,13 +151,21 @@ fun MealPlanner(
                 onDismissRequest = { showUserDetailsDialog.value = false },
                 onNameChange = viewModel::updateTargetUser,
                 onConfirmation = {
-                    showUserDetailsDialog.value = false
-                    viewModel.saveTargetUser()
+                    viewModel.viewModelScope.launch {
+                        val result = viewModel.saveTargetUser()
+                        checkResult(
+                            result = result,
+                            context = context,
+                            onSuccess = { showUserDetailsDialog.value = false },
+                            errorMessage = "A user with that name already exists."
+                        )
+                    }
                 },
                 titleText =
                     when (userUiState.targetUserDetails.id) {
                         0L -> stringResource(R.string.new_user)
-                        else -> stringResource(R.string.edit_user)
+                        else -> "${stringResource(R.string.edit_user)} " +
+                            targetOriginalName.value
                     },
             )
         }
@@ -174,7 +186,7 @@ fun MealPlanner(
             modifier = Modifier.padding(paddingValues = it),
         ) {
             WeekBar(
-                dateUiState = dateUiState,
+                daysOfSelectedWeek = mealUiState.daysOfSelectedWeek,
                 onSwipe = viewModel::incrementSelectedDay,
                 onDayClick = { index: Int, day: LocalDate -> scope.launch {
                     listState.animateScrollToItem(index)
@@ -185,11 +197,12 @@ fun MealPlanner(
                 userUiState = userUiState,
                 onUserChange = viewModel::updateSelectedUser,
                 onUserEditClick = { userDetails ->
-                    viewModel.editUser(userDetails)
+                    viewModel.updateTargetUser(userDetails)
+                    targetOriginalName.value = userDetails.name
                     showUserDetailsDialog.value = true
                 },
                 onUserAddClick = {
-                    viewModel.addUser()
+                    viewModel.updateTargetUser()
                     showUserDetailsDialog.value = true
                 },
                 onUserDeleteClick = viewModel::deleteUser,
@@ -198,7 +211,6 @@ fun MealPlanner(
                 modifier = Modifier,
                 mealUiState = mealUiState,
                 userUiState = userUiState,
-                dateUiState = dateUiState,
                 onMealClick = navigateToMealDetail,
                 onMealDeleteClick = viewModel::deleteInstance,
                 daysOfWeekListState = listState,
@@ -217,7 +229,7 @@ fun MealPlanner(
  * Displays the days of the selected week in a horizontal list.
  *
  * @param modifier The Modifier to be applied to the WeekBar.
- * @param dateUiState The state of the date interface.
+ * @param daysOfSelectedWeek The state of the date interface.
  * @param onSwipe The function that is called when the week bar is swiped left or right.
  * @param onDayClick The function that is called when a day is clicked.
  *
@@ -227,7 +239,7 @@ fun MealPlanner(
 @Preview(apiLevel = 33)
 fun WeekBar(
     modifier: Modifier = Modifier,
-    dateUiState: DateUiState = DateUiState(),
+    daysOfSelectedWeek: List<LocalDate> = listOf(),
     onSwipe: (Int) -> Unit = { _ -> },
     onDayClick: (Int, LocalDate) -> Unit = {_, _, -> },
 ) {
@@ -328,7 +340,7 @@ fun WeekBar(
                 },
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            itemsIndexed(dateUiState.daysOfSelectedWeek) { index, day ->
+            itemsIndexed(daysOfSelectedWeek) { index, day ->
                 Column(
                     modifier = Modifier
                         .clickable { onDayClick(index, day) }
@@ -510,9 +522,9 @@ fun UserDropdown(
 @Preview
 fun UserDialog(
     onDismissRequest: () -> Unit = { },
-    onConfirmation: (UserDetails) -> Unit = { },
+    onConfirmation: () -> Unit = { },
     userDetails: UserDetails = UserDetails(0, ""),
-    onNameChange: (UserDetails) -> Unit = {},
+    onNameChange: (userDetails: UserDetails) -> Unit = {},
     titleText: String = "New User",
 ) {
     Dialog(
@@ -532,7 +544,6 @@ fun UserDialog(
  * The UserForm is used to add a new user or edit an existing user.
  *
  * @param onDismissRequest The function that is called when the dismiss button is clicked.
- * @param onConfirmation The function that is called when the confirm button is clicked.
  * @param onNameChange The function that is called when the name of the user is changed in the TextField.
  * @param titleText The title of the dialog.
  * @param userDetails A UserDetails object that represents the target user. This is used to pre-fill the TextField with the user's name.
@@ -540,7 +551,7 @@ fun UserDialog(
 @Composable
 fun UserForm(
     onDismissRequest: () -> Unit,
-    onConfirmation: (UserDetails) -> Unit,
+    onConfirmation: () -> Unit,
     onNameChange: (UserDetails) -> Unit = {},
     titleText: String = "New User",
     userDetails: UserDetails,
@@ -587,7 +598,7 @@ fun UserForm(
                     Text("Cancel")
                 }
                 TextButton(
-                    onClick = { onConfirmation(userDetails) },
+                    onClick = onConfirmation,
                     modifier = Modifier.padding(8.dp),
                 ) {
                     Text("Confirm")
@@ -603,7 +614,6 @@ fun UserForm(
  *
  * @param modifier The Modifier to be applied to the MealPlanningBody.
  * @param mealUiState The state of the meal interface.
- * @param dateUiState The state of the date interface.
  * @param onMealClick The function that is called when a meal is clicked.
  * @param userUiState The state of the user interface. This is used to get the ID of the selected user.
  * @param onMealDeleteClick The function that is called when the delete icon of a meal is clicked.
@@ -614,7 +624,6 @@ fun UserForm(
 fun MealPlanningBody(
     modifier: Modifier = Modifier,
     mealUiState: MealUiState = MealUiState(),
-    dateUiState: DateUiState = DateUiState(),
     onMealClick: (mealId: Long, date: LocalDate, occasion: Occasion, userId: Long, instanceId: Long)
         -> Unit = { _, _, _, _, _ -> },
     userUiState: UserUiState = UserUiState(),
@@ -623,7 +632,7 @@ fun MealPlanningBody(
 ) {
     // Scroll down to the selected day
     LaunchedEffect(key1 = true) {
-        daysOfWeekListState.animateScrollToItem(dateUiState.selectedDay.dayOfWeek.ordinal)
+        daysOfWeekListState.animateScrollToItem(mealUiState.selectedDay.dayOfWeek.ordinal)
     }
 
     // Display the meals for each day of the selected week
@@ -631,7 +640,7 @@ fun MealPlanningBody(
         modifier = modifier.fillMaxWidth(),
         state = daysOfWeekListState,
     ) {
-        items(dateUiState.daysOfSelectedWeek) {day ->
+        items(mealUiState.daysOfSelectedWeek) {day ->
             DayOfTheWeek(
                 date = day,
                 mealInstances =

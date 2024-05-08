@@ -31,7 +31,7 @@ abstract class MealPlannerDatabase : RoomDatabase() {
 
     abstract fun mealInstanceDao(): MealInstanceDao
 
-    abstract fun plannerUserDao(): UserDao
+    abstract fun userDao(): UserDao
 
     companion object {
         @Volatile

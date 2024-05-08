@@ -1,5 +1,6 @@
 package com.jimmy.parentsmealplanner.ui.meal
 
+import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -14,17 +15,16 @@ import com.jimmy.parentsmealplanner.ui.shared.MealDetails
 import com.jimmy.parentsmealplanner.ui.shared.MealInstanceDetails
 import com.jimmy.parentsmealplanner.ui.shared.Occasion
 import com.jimmy.parentsmealplanner.ui.shared.Rating
-import com.jimmy.parentsmealplanner.ui.shared.toDish
 import com.jimmy.parentsmealplanner.ui.shared.toDishDetails
 import com.jimmy.parentsmealplanner.ui.shared.toDishInMeal
 import com.jimmy.parentsmealplanner.ui.shared.toInstanceDetails
-import com.jimmy.parentsmealplanner.ui.shared.toMeal
 import com.jimmy.parentsmealplanner.ui.shared.toMealDetails
 import com.jimmy.parentsmealplanner.ui.shared.toMealInstanceDetails
 import com.jimmy.parentsmealplanner.ui.shared.toMealWithDishes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -41,6 +41,7 @@ import kotlinx.datetime.toLocalDateTime
 import java.util.Locale
 import javax.inject.Inject
 
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class MealDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
@@ -68,12 +69,12 @@ class MealDetailViewModel @Inject constructor(
     // Holds the indices of dishes that are duplicates of another dish
     private val duplicateDishIndices = mutableSetOf<Int>()
 
-    var mealDetailUiState by mutableStateOf(MealDetailUiState())
-        private set
+    private val _mealDetailUiState = MutableStateFlow(MealDetailUiState())
+    val mealDetailUiState: StateFlow<MealDetailUiState> = _mealDetailUiState
 
     init {
         viewModelScope.launch {
-            mealDetailUiState = when (instanceId == 0.toLong()) {
+            _mealDetailUiState.value = when (instanceId == 0.toLong()) {
                 true -> {
                     MealDetailUiState(mealInstanceDetails =
                         MealInstanceDetails(
@@ -210,15 +211,17 @@ class MealDetailViewModel @Inject constructor(
      */
     fun findExistingMeal(mealName: String) {
         val existingMeal = filteredMealSearchResults.value.find { it.name == mealName }
-        val differentMeal = (existingMeal != mealDetailUiState.mealInstanceDetails.mealDetails)
+        val differentMeal =
+            (existingMeal != _mealDetailUiState.value.mealInstanceDetails.mealDetails)
 
         if (existingMeal == null) {
             updateUiState(
                 mealDetails = MealDetails(
                     name = mealName,
-                    dishes = mealDetailUiState.mealInstanceDetails.mealDetails.dishes,
+                    dishes = mealDetailUiState.value.mealInstanceDetails.mealDetails.dishes,
                 ),
             )
+            Log.d("MealDetailViewModel", "found no existing meal")
 
             dishesToDelete = emptySet()
             savedDishes.clear()
@@ -226,11 +229,13 @@ class MealDetailViewModel @Inject constructor(
             updateUiState(
                 mealDetails = existingMeal,
             )
+            Log.d("MealDetailViewModel", "found existing meal")
 
             dishesToDelete = emptySet()
             savedDishes.clear()
             savedDishes += existingMeal.dishes
-        }
+        } else Log.d("MealDetailViewModel", "Looked and found the same meal")
+
     }
 
     /**
@@ -241,13 +246,16 @@ class MealDetailViewModel @Inject constructor(
      */
     fun findExistingDish(index: Int, dishName: String) {
         val existingDish = filteredDishSearchResults.value.find { it.name == dishName }
-        val updatedDishes = mealDetailUiState.mealInstanceDetails.mealDetails.dishes.toMutableList()
+        val updatedDishes =
+            mealDetailUiState.value.mealInstanceDetails.mealDetails.dishes.toMutableList()
 
         if (existingDish != null && existingDish != updatedDishes[index]) {
             markDishForDeletion(updatedDishes[index])
             updatedDishes[index] = existingDish
-            updateUiState(mealDetails = mealDetailUiState.mealInstanceDetails.mealDetails.copy(
-                dishes = updatedDishes)
+            updateUiState(
+                mealDetails = mealDetailUiState.value.mealInstanceDetails.mealDetails.copy(
+                    dishes = updatedDishes
+                )
             )
         }
     }
@@ -258,9 +266,11 @@ class MealDetailViewModel @Inject constructor(
      * @param newName The new name for the meal.
      */
     fun changeMeal(newName: String) {
+        Log.d("MealDetailViewModel", "changeMeal: $newName")
         onMealSearchTermChange(newTerm = newName)
         updateUiState(
-            mealDetails = mealDetailUiState.mealInstanceDetails.mealDetails.copy(name = newName)
+            mealDetails =
+                mealDetailUiState.value.mealInstanceDetails.mealDetails.copy(name = newName)
         )
     }
 
@@ -271,7 +281,8 @@ class MealDetailViewModel @Inject constructor(
      */
     fun changeMealRating(newRating: Rating) {
         updateUiState(
-            mealDetails = mealDetailUiState.mealInstanceDetails.mealDetails.copy(rating = newRating)
+            mealDetails =
+                mealDetailUiState.value.mealInstanceDetails.mealDetails.copy(rating = newRating)
         )
     }
 
@@ -283,7 +294,8 @@ class MealDetailViewModel @Inject constructor(
      * @param newName The new name for the dish.
      */
     fun changeDish(index: Int, newName: String) {
-        val updatedDishes = mealDetailUiState.mealInstanceDetails.mealDetails.dishes.toMutableList()
+        val updatedDishes =
+            mealDetailUiState.value.mealInstanceDetails.mealDetails.dishes.toMutableList()
         val targetDish = updatedDishes[index]
 
         markDishForDeletion(targetDish)
@@ -295,7 +307,7 @@ class MealDetailViewModel @Inject constructor(
 
         onDishSearchTermChange(newTerm = newName)
         updateUiState(
-            mealDetailUiState.mealInstanceDetails.mealDetails.copy(dishes = updatedDishes)
+            mealDetailUiState.value.mealInstanceDetails.mealDetails.copy(dishes = updatedDishes)
         )
     }
 
@@ -305,10 +317,11 @@ class MealDetailViewModel @Inject constructor(
      * @param dishDetails The new dish details to update the UI with
      */
     fun addDish(dishDetails: DishDetails) {
-        val updatedDishes = mealDetailUiState.mealInstanceDetails.mealDetails.dishes + dishDetails
+        val updatedDishes =
+            mealDetailUiState.value.mealInstanceDetails.mealDetails.dishes + dishDetails
 
         updateUiState(
-            mealDetails = mealDetailUiState.mealInstanceDetails.mealDetails.copy(
+            mealDetails = mealDetailUiState.value.mealInstanceDetails.mealDetails.copy(
                 dishes = updatedDishes
             )
         )
@@ -322,14 +335,13 @@ class MealDetailViewModel @Inject constructor(
      * @return Boolean value indicating whether the dish is saved (true) or not (false).
      */
     fun isDishSaved(dishDetails: DishDetails): Boolean {
-        return savedDishes.contains(dishDetails)
+        return savedDishes.any { it.dishId == dishDetails.dishId }
     }
 
+
     /**
-     * Immediately updates the dish at the given index with
+     * Updates the dish at the given index with
      * the new name and rating while maintaining id.
-     * If the name is changed, any other unsaved dishes with the old name are considered new dishes
-     * and their IDs are updated to 0.
      * Updates the UI state if the update was successful.
      *
      * @param index The index of the dish to be updated.
@@ -338,8 +350,8 @@ class MealDetailViewModel @Inject constructor(
      * @return Boolean value indicating whether the update was successful.
      */
     suspend fun updateDish(index: Int, newName: String, newRating: Rating): Boolean {
-        val updatedDishes = mealDetailUiState.mealInstanceDetails.mealDetails.dishes.toMutableList()
-        val savedDishIndex = savedDishes.indexOf(updatedDishes[index])
+        val updatedDishes =
+            mealDetailUiState.value.mealInstanceDetails.mealDetails.dishes.toMutableList()
         val oldDish = updatedDishes[index]
 
         updatedDishes[index] = oldDish.copy(
@@ -353,10 +365,6 @@ class MealDetailViewModel @Inject constructor(
             }
         }
 
-        mealRepository.updateDish(updatedDishes[index].toDish())
-
-        if (savedDishIndex != -1) savedDishes[savedDishIndex] = updatedDishes[index]
-
         // In case there are duplicates in the UI state, update them to match the database
         updatedDishes.replaceAll {
             if (it.name == oldDish.name) it.copy(
@@ -366,7 +374,7 @@ class MealDetailViewModel @Inject constructor(
         }
 
         updateUiState(
-            mealDetails = mealDetailUiState.mealInstanceDetails.mealDetails.copy(
+            mealDetails = mealDetailUiState.value.mealInstanceDetails.mealDetails.copy(
                 dishes = updatedDishes
             )
         )
@@ -374,24 +382,22 @@ class MealDetailViewModel @Inject constructor(
     }
 
     /**
-     * Immediately updates the meal with the new name.
+     * Updates the meal with the new name.
      * Updates the UI state if the update was successful.
      *
      * @param newName The new name for the meal.
      * @return Boolean value indicating whether the update was successful.
      */
     suspend fun updateMealName(newName: String): Boolean {
-        val updatedMeal = mealDetailUiState.mealInstanceDetails.mealDetails.copy(
-            name = newName
-        ).toMeal()
+        val updatedMeal = mealDetailUiState.value.mealInstanceDetails.mealDetails.copy(
+            name = newName,
+        )
 
         val mealRecord = mealRepository.getMealByName(newName)
-        if (mealRecord?.mealId != updatedMeal.mealId)
+        if (mealRecord != null && mealRecord.mealId != updatedMeal.mealId)
             return false // Name is already taken by another meal
-
-        mealRepository.updateMeal(updatedMeal)
-
-        updateUiState(mealDetails = updatedMeal.toMealDetails())
+        
+        updateUiState(mealDetails = updatedMeal)
         return true
     }
 
@@ -402,7 +408,8 @@ class MealDetailViewModel @Inject constructor(
      */
     fun updateImage(imageSrc: String) {
         updateUiState(
-            mealDetails = mealDetailUiState.mealInstanceDetails.mealDetails.copy(imgSrc = imageSrc)
+            mealDetails =
+                mealDetailUiState.value.mealInstanceDetails.mealDetails.copy(imgSrc = imageSrc)
         )
     }
 
@@ -414,10 +421,11 @@ class MealDetailViewModel @Inject constructor(
      * Updates the UI state if the deletion was immediate.
      *
      * @param index The index of the dish to be deleted.
-     * @return Boolean value indicating whether the dish was immediately removed (true) or marked for deletion (false).
+     * @return Boolean value indicating whether the dish was immediately
+     * removed (true) or marked for deletion (false).
      */
     fun deleteDish(index: Int): Boolean {
-        val targetDish = mealDetailUiState.mealInstanceDetails.mealDetails.dishes[index]
+        val targetDish = mealDetailUiState.value.mealInstanceDetails.mealDetails.dishes[index]
 
         // If the dish is saved as part of the meal in the db, it needs to be marked for deletion
         if (markDishForDeletion(targetDish)) {
@@ -425,12 +433,12 @@ class MealDetailViewModel @Inject constructor(
         }
         else { // otherwise it can just be removed from the list immediately
             val updatedDishes =
-                mealDetailUiState.mealInstanceDetails.mealDetails.dishes.minus(
+                mealDetailUiState.value.mealInstanceDetails.mealDetails.dishes.minus(
                     targetDish
                 )
 
             updateUiState(
-                mealDetails = mealDetailUiState.mealInstanceDetails.mealDetails.copy(
+                mealDetails = mealDetailUiState.value.mealInstanceDetails.mealDetails.copy(
                     dishes = updatedDishes,
                 ),
             )
@@ -443,11 +451,12 @@ class MealDetailViewModel @Inject constructor(
      * and appears exactly once in the UI state's list of dishes.
      *
      * @param targetDish The dish to be marked for deletion.
-     * @return Boolean value indicating whether the dish was marked for deletion (true) or not (false).
+     * @return Boolean value indicating whether the dish was
+     * marked for deletion (true) or not (false).
      */
     private fun markDishForDeletion(targetDish: DishDetails): Boolean {
-        val dishes = mealDetailUiState.mealInstanceDetails.mealDetails.dishes
-        if (savedDishes.contains(targetDish) && dishes.count{it == targetDish} == 1) {
+        val dishes = mealDetailUiState.value.mealInstanceDetails.mealDetails.dishes
+        if (isDishSaved(targetDish) && dishes.count { it == targetDish } == 1) {
             dishesToDelete += targetDish
             return true
         }
@@ -473,10 +482,10 @@ class MealDetailViewModel @Inject constructor(
     fun updateUiState(
         mealInstanceDetails: MealInstanceDetails? = null,
     ) {
-        val newMealInstance = mealInstanceDetails ?: mealDetailUiState.mealInstanceDetails
+        val newMealInstance = mealInstanceDetails ?: mealDetailUiState.value.mealInstanceDetails
         updateIndices(newMealInstance.mealDetails.dishes)
 
-        mealDetailUiState =
+        _mealDetailUiState.value =
             MealDetailUiState(
                 mealInstanceDetails = newMealInstance,
                 isEntryValid = validateInput(newMealInstance),
@@ -494,11 +503,14 @@ class MealDetailViewModel @Inject constructor(
         mealDetails: MealDetails? = null,
     ) {
         val newMealInstance = if (mealDetails != null) {
-            mealDetailUiState.mealInstanceDetails.copy(
+            Log.d("MealDetailViewModel", "updatedMeal to showup in ui: $mealDetails")
+
+            mealDetailUiState.value.mealInstanceDetails.copy(
                 mealDetails = mealDetails
             )
         } else {
-            mealDetailUiState.mealInstanceDetails
+            Log.d("MealDetailViewModel", "updatedMeal was null")
+            mealDetailUiState.value.mealInstanceDetails
         }
         updateUiState(mealInstanceDetails = newMealInstance)
     }
@@ -539,17 +551,17 @@ class MealDetailViewModel @Inject constructor(
         if (dishesToDelete.isNotEmpty()) {
             mealRepository.deleteDishesFromMeal(
                 dishesToDelete.map {
-                    it.toDishInMeal(mealDetailUiState.mealInstanceDetails.mealDetails.mealId)
+                    it.toDishInMeal(mealDetailUiState.value.mealInstanceDetails.mealDetails.mealId)
                 }
             )
         }
 
         val updatedDishes =
-            mealDetailUiState.mealInstanceDetails.mealDetails.dishes - dishesToDelete
+            mealDetailUiState.value.mealInstanceDetails.mealDetails.dishes - dishesToDelete
         val updatedMealDetails =
-            mealDetailUiState.mealInstanceDetails.mealDetails.copy(dishes = updatedDishes)
+            mealDetailUiState.value.mealInstanceDetails.mealDetails.copy(dishes = updatedDishes)
         val updatedInstance =
-            mealDetailUiState.mealInstanceDetails.copy(mealDetails = updatedMealDetails)
+            mealDetailUiState.value.mealInstanceDetails.copy(mealDetails = updatedMealDetails)
 
         val savedInstance = mealRepository.upsertMealWithDishesInstance(
             updatedInstance.toInstance()

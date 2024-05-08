@@ -21,7 +21,7 @@ class AppDataContainer(private val context: Context) : AppContainer {
             MealPlannerDatabase.getDatabase(context).dishDao(),
             MealPlannerDatabase.getDatabase(context).dishInMealDao(),
             MealPlannerDatabase.getDatabase(context).mealInstanceDao(),
-            MealPlannerDatabase.getDatabase(context).plannerUserDao(),
+            MealPlannerDatabase.getDatabase(context).userDao(),
         )
     }
 }

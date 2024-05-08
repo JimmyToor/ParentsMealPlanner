@@ -98,6 +98,7 @@ import com.jimmy.parentsmealplanner.ui.shared.Occasion
 import com.jimmy.parentsmealplanner.ui.shared.Rating
 import com.jimmy.parentsmealplanner.ui.shared.RatingEmoji
 import com.jimmy.parentsmealplanner.ui.shared.TopBar
+import com.jimmy.parentsmealplanner.util.checkResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -141,7 +142,7 @@ fun MealDetail(
     viewModel: MealDetailViewModel = hiltViewModel(),
     mainViewModel: MainViewModel = hiltViewModel<MainViewModel>(),
 ) {
-    val mealDetailUiState = viewModel.mealDetailUiState
+    val mealDetailUiState by viewModel.mealDetailUiState.collectAsStateWithLifecycle()
     val mealSearchResults by viewModel.filteredMealSearchResults.collectAsStateWithLifecycle()
     val dishSearchResults by viewModel.filteredDishSearchResults.collectAsStateWithLifecycle()
     var showRenameMealDialog by rememberSaveable { mutableStateOf(false) }
@@ -167,10 +168,10 @@ fun MealDetail(
         showRenameMealDialog -> {
             RenameMealDialog(
                 onDismissRequest = { showRenameMealDialog = false },
-                onConfirmation = {
+                onConfirmation = { newName ->
                     viewModel.viewModelScope.launch {
                         val result = viewModel.updateMealName(
-                            newName = it,
+                            newName = newName,
                         )
                         checkResult(
                             result = result,
@@ -180,7 +181,7 @@ fun MealDetail(
                         )
                     }
                 },
-                name = mealDetailUiState.mealInstanceDetails.mealDetails.name,
+                initialName = mealDetailUiState.mealInstanceDetails.mealDetails.name,
             )
         }
 
@@ -207,10 +208,8 @@ fun MealDetail(
                     .dishes[targetDishIndex].name,
                 initialRating = mealDetailUiState.mealInstanceDetails.mealDetails
                     .dishes[targetDishIndex].rating,
-                saved = viewModel.isDishSaved(
-                    mealDetailUiState.mealInstanceDetails.mealDetails
-                        .dishes[targetDishIndex]
-                ),
+                saved = mealDetailUiState.mealInstanceDetails.mealDetails
+                        .dishes[targetDishIndex].dishId != 0L,
             )
         }
     }
@@ -250,7 +249,7 @@ fun MealDetail(
                 modifier = Modifier
                     .verticalScroll(rememberScrollState())
                     .fillMaxWidth(),
-                mealDetailUiState = viewModel.mealDetailUiState,
+                mealDetailUiState = mealDetailUiState,
                 onDishAdded = viewModel::addDish,
                 onMealRatingChanged = viewModel::changeMealRating,
                 onMealInstanceDetailsChange = { viewModel.updateUiState(mealInstanceDetails = it) },
@@ -338,46 +337,21 @@ fun LabelledCheckBox(
 }
 
 /**
- * This function checks the result of an operation and performs an action based on the result.
- * If the result is false, it shows a Toast message with an error message.
- * If the result is true, it performs a success action.
- *
- * @param result The result of the operation to check where true = success, and false = error.
- * @param context The context in which to show the Toast message.
- * @param onSuccess The function that is invoked when the result is true.
- * @param errorMessage The message to show in the Toast when the result is false.
- */
-private fun checkResult(
-    result: Boolean,
-    context: Context,
-    onSuccess: () -> Unit,
-    errorMessage: String,
-) {
-    if (!result) {
-        Toast.makeText(
-            context,
-            errorMessage,
-            Toast.LENGTH_SHORT
-        ).show()
-    } else {
-        onSuccess()
-    }
-}
-
-/**
  * Displays a dialog for renaming a meal.
  *
  * @param onDismissRequest The function that is invoked when the dialog is dismissed.
  * @param onConfirmation The function that is invoked when the user confirms the action.
- * @param name A string that represents the current name of the meal.
+ * @param initialName A string that represents the current name of the meal.
  */
 @Composable
 @Preview
 fun RenameMealDialog(
     onDismissRequest: () -> Unit = { },
     onConfirmation: (String) -> Unit = { },
-    name: String = "Meal Name",
+    initialName: String = "Meal Name",
 ) {
+    var name by rememberSaveable { mutableStateOf(initialName) }
+
     Dialog(
         onDismissRequest = onDismissRequest,
     ) {
@@ -389,7 +363,10 @@ fun RenameMealDialog(
             shape = RoundedCornerShape(16.dp),
         ) {
             RenameForm(
-                titleText = R.string.rename_meal,
+                onValueChange = {
+                    name = it
+                },
+                titleText = stringResource(R.string.rename_meal) + " " + initialName,
                 name = name,
             )
             DialogButtons(
@@ -436,7 +413,7 @@ fun EditDishDialog(
                     onValueChange = {
                         name = it
                     },
-                    titleText = R.string.edit_dish,
+                    titleText = stringResource(id = R.string.edit_dish) + " " + initialName,
                     name = name
                 )
             }
@@ -494,7 +471,7 @@ private fun DialogButtons(
  */
 @Composable
 fun RenameForm(
-    titleText: Int = R.string.rename,
+    titleText: String = stringResource(id = R.string.rename),
     name: String = "Default Name",
     onValueChange: (String) -> Unit = {},
 ) {
@@ -508,7 +485,7 @@ fun RenameForm(
                 .align(Alignment.CenterHorizontally)
                 .padding(top = 12.dp),
             style = MaterialTheme.typography.titleLarge,
-            text = stringResource(id = titleText),
+            text = titleText,
         )
         TextField(
             value = name,
@@ -698,13 +675,16 @@ fun ImageField(
                         pickImageContract.launch(
                             PickVisualMediaRequest(
                                 mediaType = ActivityResultContracts.PickVisualMedia.ImageOnly
-                            ))
+                            )
+                        )
                     } else {
-                        Toast.makeText(
-                            context,
-                            "Not supported on this device",
-                            Toast.LENGTH_LONG
-                        ).show()
+                        Toast
+                            .makeText(
+                                context,
+                                "Not supported on this device",
+                                Toast.LENGTH_LONG
+                            )
+                            .show()
                     }
                 },
             model = ImageRequest.Builder(context)
@@ -721,18 +701,23 @@ fun ImageField(
                 .fillMaxWidth()
                 .padding(dimensionResource(id = R.dimen.padding_medium))
                 .height(200.dp)
-                .clickable { if (isPhotoPickerAvailable(context)) {
-                    pickImageContract.launch(
-                        PickVisualMediaRequest(
-                            mediaType = ActivityResultContracts.PickVisualMedia.ImageOnly
-                        ))
-                } else {
-                    Toast.makeText(
-                        context,
-                        "Not supported on this device",
-                        Toast.LENGTH_LONG
-                    ).show()
-                } }
+                .clickable {
+                    if (isPhotoPickerAvailable(context)) {
+                        pickImageContract.launch(
+                            PickVisualMediaRequest(
+                                mediaType = ActivityResultContracts.PickVisualMedia.ImageOnly
+                            )
+                        )
+                    } else {
+                        Toast
+                            .makeText(
+                                context,
+                                "Not supported on this device",
+                                Toast.LENGTH_LONG
+                            )
+                            .show()
+                    }
+                }
                 .drawBehind {
                     drawRoundRect(
                         color = Color.Gray,
@@ -867,7 +852,6 @@ fun MealField(
                 query = mealDetails.name,
                 onQueryChange = onNameChange,
                 onSearch = {
-                    onMealClick(mealDetails.name)
                     active = false
                 },
                 placeholder = {

@@ -1,6 +1,7 @@
 package com.jimmy.parentsmealplanner.ui.shared
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.width
@@ -19,7 +20,8 @@ fun IndeterminateCircularIndicator() {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.3f)),
+            .background(Color.Black.copy(alpha = 0.3f))
+            .clickable {  },
     ) {
         CircularProgressIndicator(
             modifier =

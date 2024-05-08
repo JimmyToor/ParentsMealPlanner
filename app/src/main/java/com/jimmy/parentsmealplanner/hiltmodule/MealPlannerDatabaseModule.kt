@@ -44,7 +44,7 @@ class MealPlannerDatabaseModule {
 
     @Provides
     fun providePlannerUserDao(appDatabase: MealPlannerDatabase): com.jimmy.parentsmealplanner.model.UserDao {
-        return appDatabase.plannerUserDao()
+        return appDatabase.userDao()
     }
 
     @Provides
