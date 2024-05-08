@@ -16,7 +16,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -31,7 +31,7 @@ import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import javax.inject.Inject
 
-private const val FIRST_USER_ID = 1L
+const val DEFAULT_USER_ID = 1L
 
 /**
  * [ViewModel] for the meal planning screen.
@@ -91,7 +91,7 @@ class MealPlanningViewModel @Inject constructor(
      *
      * The [Flow] is updated whenever targetUserDetails or the list of all users in the [mealRepository] changes.
      *
-     * If no users are found in the meal repository, a new user is inserted with the ID [FIRST_USER_ID] and a name "User #FIRST_USER_ID".
+     * If no users are found in the meal repository, a new user is inserted with the ID [DEFAULT_USER_ID] and a name "User #FIRST_USER_ID".
      *
      * @param userId The ID of the user for which the [UserUiState] is to be created. If null, a new user is inserted into the [mealRepository] and its ID is assigned to [selectedUser].
      * @return A [Flow] of [UserUiState] based on the provided user ID.
@@ -100,7 +100,7 @@ class MealPlanningViewModel @Inject constructor(
         if (userId == null) {
             if (mealRepository.getAllUsers().isEmpty()) {
                 mealRepository.insertUser(
-                    UserDetails(id = FIRST_USER_ID, name = "User #$FIRST_USER_ID").toUser()
+                    UserDetails(id = DEFAULT_USER_ID, name = "User #$DEFAULT_USER_ID").toUser()
                 )
             }
             selectedUser.value = mealRepository.getAllUsers().first().userId
@@ -111,7 +111,8 @@ class MealPlanningViewModel @Inject constructor(
             mealRepository.getAllUsersStream(),
         ) { targetUserDetails, allUsers ->
             UserUiState(
-                selectedUserDetails = allUsers.first { it.userId == userId }.toUserDetails(),
+                selectedUserDetails = allUsers.firstOrNull { it.userId == userId }?.toUserDetails()
+                    ?:allUsers.first().toUserDetails(),
                 allUsersDetails = allUsers.map { it.toUserDetails() },
                 targetUserDetails = targetUserDetails,
             )
@@ -127,7 +128,7 @@ class MealPlanningViewModel @Inject constructor(
         loading.value = true
 
         viewModelScope.launch {
-            userUiState.first { it.allUsersDetails.isNotEmpty() }
+            userUiState.firstOrNull { it.allUsersDetails.isNotEmpty() }
             loading.value = false
         }
     }
