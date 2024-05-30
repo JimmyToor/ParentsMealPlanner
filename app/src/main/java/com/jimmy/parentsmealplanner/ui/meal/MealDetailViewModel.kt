@@ -221,7 +221,6 @@ class MealDetailViewModel @Inject constructor(
                     dishes = mealDetailUiState.value.mealInstanceDetails.mealDetails.dishes,
                 ),
             )
-            Log.d("MealDetailViewModel", "found no existing meal")
 
             dishesToDelete = emptySet()
             savedDishes.clear()
@@ -229,12 +228,11 @@ class MealDetailViewModel @Inject constructor(
             updateUiState(
                 mealDetails = existingMeal,
             )
-            Log.d("MealDetailViewModel", "found existing meal")
 
             dishesToDelete = emptySet()
             savedDishes.clear()
             savedDishes += existingMeal.dishes
-        } else Log.d("MealDetailViewModel", "Looked and found the same meal")
+        }
 
     }
 
@@ -503,13 +501,10 @@ class MealDetailViewModel @Inject constructor(
         mealDetails: MealDetails? = null,
     ) {
         val newMealInstance = if (mealDetails != null) {
-            Log.d("MealDetailViewModel", "updatedMeal to showup in ui: $mealDetails")
-
             mealDetailUiState.value.mealInstanceDetails.copy(
                 mealDetails = mealDetails
             )
         } else {
-            Log.d("MealDetailViewModel", "updatedMeal was null")
             mealDetailUiState.value.mealInstanceDetails
         }
         updateUiState(mealInstanceDetails = newMealInstance)

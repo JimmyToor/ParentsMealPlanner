@@ -134,6 +134,7 @@ fun MealPlanner(
     val userUiState by viewModel.userUiState.collectAsStateWithLifecycle()
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     val showUserDetailsDialog = rememberSaveable { mutableStateOf(false) }
+    val showDeleteUserDialog = rememberSaveable { mutableStateOf(false) }
     val isLoading by viewModel.loading.collectAsState()
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -167,6 +168,16 @@ fun MealPlanner(
                         else -> "${stringResource(R.string.edit_user)} " +
                             targetOriginalName.value
                     },
+            )
+        }
+        showDeleteUserDialog.value -> {
+            DeleteUserDialog(
+                onDismissRequest = { showDeleteUserDialog.value = false },
+                onConfirmation = {
+                    viewModel.deleteUser(userUiState.targetUserDetails)
+                    showDeleteUserDialog.value = false
+                },
+                userName = userUiState.targetUserDetails.name,
             )
         }
     }
@@ -205,7 +216,10 @@ fun MealPlanner(
                     viewModel.updateTargetUser()
                     showUserDetailsDialog.value = true
                 },
-                onUserDeleteClick = viewModel::deleteUser,
+                onUserDeleteClick = { userDetails ->
+                    viewModel.updateTargetUser(userDetails)
+                    showDeleteUserDialog.value = true
+                },
             )
             MealPlanningBody(
                 modifier = Modifier,
@@ -537,6 +551,70 @@ fun UserDialog(
             titleText = titleText,
             userDetails = userDetails,
         )
+    }
+}
+
+// Displays a dialog that asks the user to confirm if they want to delete the user.
+@Composable
+@Preview
+fun DeleteUserDialog(
+    onDismissRequest: () -> Unit = { },
+    onConfirmation: () -> Unit = { },
+    userName: String = "",
+) {
+    Dialog(
+        onDismissRequest = onDismissRequest,
+    ) {
+        DeleteUserConfirmation(
+            onDismissRequest = onDismissRequest,
+            onConfirmation = onConfirmation,
+            userName = userName,
+        )
+    }
+}
+
+@Composable
+fun DeleteUserConfirmation(
+    onDismissRequest: () -> Unit = { },
+    onConfirmation: () -> Unit = { },
+    userName: String = "Default User",
+) {
+    Card(
+        modifier =
+        Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        shape = RoundedCornerShape(16.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(24.dp),
+        ) {
+            Text( // Title
+                modifier =
+                Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .padding(top = 12.dp),
+                style = MaterialTheme.typography.titleLarge,
+                text = "Delete ${userName}'s meal plan?",
+            )
+            Row( // Buttons
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                TextButton(
+                    onClick = onDismissRequest,
+                    modifier = Modifier.padding(8.dp),
+                ) {
+                    Text("Cancel")
+                }
+                TextButton(
+                    onClick = onConfirmation,
+                    modifier = Modifier.padding(8.dp),
+                ) {
+                    Text("Confirm")
+                }
+            }
+        }
     }
 }
 

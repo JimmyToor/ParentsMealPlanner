@@ -98,6 +98,8 @@ import com.jimmy.parentsmealplanner.ui.shared.Occasion
 import com.jimmy.parentsmealplanner.ui.shared.Rating
 import com.jimmy.parentsmealplanner.ui.shared.RatingEmoji
 import com.jimmy.parentsmealplanner.ui.shared.TopBar
+import com.jimmy.parentsmealplanner.ui.theme.md_theme_all_existsContainer
+import com.jimmy.parentsmealplanner.ui.theme.md_theme_all_savedContainer
 import com.jimmy.parentsmealplanner.util.checkResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -959,13 +961,13 @@ fun MealListItem(
  * @param onNameChange The function that is invoked when the name of a dish changes. It takes the index of the dish and the new name as parameters.
  * @param onDishAdded The function that is invoked when a dish is added. It takes the details of the new dish as a parameter.
  * @param searchResults A list of dish search results.
- * @param onDeleteDishClick The function that is invoked when a dish is deleted. It takes the index of the dish as a parameter and returns a Boolean indicating whether the deletion was successful.
+ * @param onDeleteDishClick The function that is invoked when a dish is deleted. It takes the index of the dish as a parameter and is expected to return a Boolean indicating whether the deletion was successful.
  * @param onRestoreDishClick The function that is invoked when a dish is restored. It takes the details of the dish as a parameter.
  * @param onDishClick The function that is invoked when a dish is clicked. It takes the index of the dish and the name of the dish as parameters.
  * @param onDishSearchTermChanged The function that is invoked when the dish search term changes. It takes the new search term as a parameter.
  * @param onDishEditClick The function that is invoked when the dish edit button is clicked. It takes the index of the dish as a parameter.
- * @param isDuplicate The function that checks if a dish is a duplicate. It takes the index of the dish as a parameter and returns a Boolean indicating whether the dish is a duplicate.
- * @param isDishSaved The function that checks if a dish is saved. It takes the details of the dish as a parameter and returns a Boolean indicating whether the dish is saved.
+ * @param isDuplicate The function that checks if a dish is a duplicate. It takes the index of the dish as a parameter and is expected to return a Boolean indicating whether the dish is a duplicate.
+ * @param isDishSaved The function that checks if a dish is saved in this meal. It takes the details of the dish as a parameter and is expected to return a Boolean indicating whether the dish is saved.
  */
 @Composable
 @Preview
@@ -984,7 +986,7 @@ fun DishesFields(
     onDishSearchTermChanged: (newSearchTerm: String) -> Unit = {},
     onDishEditClick: (index: Int) -> Unit = {},
     isDuplicate: (index: Int) -> Boolean = { _ -> false },
-    isDishSaved: (dishToCheck:DishDetails) -> Boolean = { false },
+    isDishSaved: (dishToCheck: DishDetails) -> Boolean = { false },
 ) {
     var altFormat by remember { mutableStateOf(false) }
 
@@ -1285,30 +1287,43 @@ fun DishField(
                 enabled = !deleted,
                 colors = when (valid) {
                     true -> {
-                        if (!isDishSaved(dishDetails)) {
+                        if (isDishSaved(dishDetails)) {
+                            SearchBarDefaults.colors(
+                                containerColor = md_theme_all_savedContainer,
+                                dividerColor = md_theme_all_savedContainer,
+                                inputFieldColors = OutlinedTextFieldDefaults.colors(
+                                    focusedContainerColor =
+                                        md_theme_all_savedContainer,
+                                    unfocusedContainerColor =
+                                        md_theme_all_savedContainer,
+                                    disabledContainerColor =
+                                        md_theme_all_savedContainer,
+                                ),
+                            )
+                        } else if (dishDetails.dishId != 0L) {
+                            SearchBarDefaults.colors(
+                                containerColor = md_theme_all_existsContainer,
+                                dividerColor = md_theme_all_existsContainer,
+                                inputFieldColors = OutlinedTextFieldDefaults.colors(
+                                    focusedContainerColor =
+                                        md_theme_all_existsContainer,
+                                    unfocusedContainerColor =
+                                        md_theme_all_existsContainer,
+                                    disabledContainerColor =
+                                        md_theme_all_existsContainer,
+                                ),
+                            )
+                        } else {
                             SearchBarDefaults.colors(
                                 containerColor = MaterialTheme.colorScheme.secondaryContainer,
                                 dividerColor = MaterialTheme.colorScheme.secondaryContainer,
                                 inputFieldColors = OutlinedTextFieldDefaults.colors(
                                     focusedContainerColor =
-                                        MaterialTheme.colorScheme.secondaryContainer,
+                                    MaterialTheme.colorScheme.secondaryContainer,
                                     unfocusedContainerColor =
-                                        MaterialTheme.colorScheme.secondaryContainer,
+                                    MaterialTheme.colorScheme.secondaryContainer,
                                     disabledContainerColor =
-                                        MaterialTheme.colorScheme.secondaryContainer,
-                                ),
-                            )
-                        } else {
-                            SearchBarDefaults.colors(
-                                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                                dividerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                                inputFieldColors = OutlinedTextFieldDefaults.colors(
-                                    focusedContainerColor =
-                                        MaterialTheme.colorScheme.tertiaryContainer,
-                                    unfocusedContainerColor =
-                                        MaterialTheme.colorScheme.tertiaryContainer,
-                                    disabledContainerColor =
-                                        MaterialTheme.colorScheme.tertiaryContainer,
+                                    MaterialTheme.colorScheme.secondaryContainer,
                                 ),
                             )
                         }
