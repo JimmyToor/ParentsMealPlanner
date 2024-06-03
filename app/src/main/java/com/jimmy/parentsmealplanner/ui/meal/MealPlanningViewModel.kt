@@ -143,7 +143,7 @@ class MealPlanningViewModel @Inject constructor(
      * @param days The number of days to add to the current selected day. Can be negative to subtract days.
      */
     fun incrementSelectedDay(days: Int) {
-        selectedDay.value?.let { selectedDay.value = it.plus(DatePeriod(days = days)) }
+        selectedDay.value?.let { updateSelectedDay(it.plus(DatePeriod(days = days))) }
     }
 
     /**

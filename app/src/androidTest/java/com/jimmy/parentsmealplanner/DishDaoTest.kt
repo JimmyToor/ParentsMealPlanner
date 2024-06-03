@@ -46,8 +46,8 @@ class DishDaoTest {
         runBlocking<Unit> {
             val dish = Datasource.loadDishes()[0]
             dishDao.insert(dish)
-            val retrievedDish = dishDao.getDish(dish.id)
-            assert(retrievedDish == dish)
+            val retrievedDish = dishDao.getDish(dish.dishId)
+            assert(retrievedDish == dish) { "Expected ${dish}, but got ${retrievedDish}" }
         }
 
     @Test
@@ -57,7 +57,7 @@ class DishDaoTest {
             val dishes = Datasource.loadDishes()
             dishDao.insertAll(dishes)
             val retrievedDishes = dishDao.getAllDishesStream().first()
-            assert(retrievedDishes == dishes)
+            assert(retrievedDishes == dishes) { "Expected ${dishes}, but got ${retrievedDishes}" }
         }
 
     @Test
@@ -68,8 +68,8 @@ class DishDaoTest {
             dishDao.insert(dish)
             val updatedDish = dish.copy(name = "Updated Dish")
             dishDao.update(updatedDish)
-            val retrievedDish = dishDao.getDish(dish.id)
-            assert(retrievedDish == updatedDish)
+            val retrievedDish = dishDao.getDish(dish.dishId)
+            assert(retrievedDish == updatedDish) { "Expected ${updatedDish}, but got ${retrievedDish}" }
         }
 
     @Test
@@ -79,8 +79,8 @@ class DishDaoTest {
             val dish = Datasource.loadDishes()[0]
             dishDao.insert(dish)
             dishDao.delete(dish)
-            val retrievedDish = dishDao.getDish(dish.id)
-            assert(retrievedDish == null)
+            val retrievedDish = dishDao.getDish(dish.dishId)
+            assert(retrievedDish == null) { "Expected null, but got $retrievedDish" }
         }
 
     @Test
@@ -89,8 +89,8 @@ class DishDaoTest {
         runBlocking<Unit> {
             val dish = Datasource.loadDishes()[0]
             dishDao.insert(dish)
-            val retrievedDish = dishDao.getDish(dish.id)
-            assert(retrievedDish == dish)
+            val retrievedDish = dishDao.getDish(dish.dishId)
+            assert(retrievedDish == dish) { "Expected ${dish}, but got $retrievedDish" }
         }
 
     @Test
@@ -99,9 +99,9 @@ class DishDaoTest {
         runBlocking<Unit> {
             val dish = Datasource.loadDishes()[0]
             dishDao.insert(dish)
-            val retrievedDishFlow = dishDao.getDishStream(dish.id)
+            val retrievedDishFlow = dishDao.getDishStream(dish.dishId)
             val retrievedDish = retrievedDishFlow.firstOrNull()
-            assert(retrievedDish == dish)
+            assert(retrievedDish == dish) { "Expected ${dish}, but got $retrievedDish" }
         }
 
     @Test
@@ -109,7 +109,7 @@ class DishDaoTest {
     fun `DishDao_Get dish with invalid ID`() =
         runBlocking<Unit> {
             val retrievedDish = dishDao.getDish(-1)
-            assert(retrievedDish == null)
+            assert(retrievedDish == null) { "Expected null, but got $retrievedDish" }
         }
 
     @Test
@@ -118,6 +118,6 @@ class DishDaoTest {
         runBlocking<Unit> {
             val retrievedDishFlow = dishDao.getDishStream(-1)
             val retrievedDish = retrievedDishFlow.firstOrNull()
-            assert(retrievedDish == null)
+            assert(retrievedDish == null) { "Expected null, but got $retrievedDish" }
         }
 }

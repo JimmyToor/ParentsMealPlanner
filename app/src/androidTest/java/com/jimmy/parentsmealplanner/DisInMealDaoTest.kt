@@ -49,13 +49,13 @@ class DisInMealDaoTest {
     fun `DishInMealDao_Insert dish in meal and retrieve`() =
         runBlocking<Unit> {
             val dishInMeal = loadDishInMeals()[0]
-            val meal = Meal(id = dishInMeal.mealId)
-            val dish = Dish(id = dishInMeal.dishId)
+            val meal = Meal(mealId = dishInMeal.mealId)
+            val dish = Dish(dishId = dishInMeal.dishId)
             mealDao.insert(meal)
             dishDao.insert(dish)
             dishInMealDao.insert(dishInMeal)
             val retrievedDishInMeal = dishInMealDao.getAllDishesInMeals().first()
-            assert(retrievedDishInMeal == dishInMeal)
+            assert(retrievedDishInMeal == dishInMeal) { "Expected ${dishInMeal}, but got $retrievedDishInMeal" }
         }
 
     @Test
@@ -69,7 +69,7 @@ class DisInMealDaoTest {
             dishDao.insertAll(dishes)
             dishInMealDao.insertAll(dishesInMeals)
             val retrievedDishesInMeals = dishInMealDao.getAllDishesInMeals()
-            assert(retrievedDishesInMeals.containsAll(dishesInMeals))
+            assert(retrievedDishesInMeals.containsAll(dishesInMeals)) { "Expected ${dishesInMeals}, but got $retrievedDishesInMeals" }
         }
 
     @Test
@@ -77,14 +77,14 @@ class DisInMealDaoTest {
     fun `DishInMealDao_Delete dish in meal`() =
         runBlocking<Unit> {
             val dishInMeal = loadDishInMeals()[0]
-            val meal = Meal(id = dishInMeal.mealId)
-            val dish = Dish(id = dishInMeal.dishId)
+            val meal = Meal(mealId = dishInMeal.mealId)
+            val dish = Dish(dishId = dishInMeal.dishId)
             mealDao.insert(meal)
             dishDao.insert(dish)
             dishInMealDao.insert(dishInMeal)
             dishInMealDao.delete(dishInMeal)
             val retrievedDishInMeal = dishInMealDao.getAllDishesInMeals().firstOrNull()
-            assert(retrievedDishInMeal == null)
+            assert(retrievedDishInMeal == null) { "Expected null, but got $retrievedDishInMeal" }
         }
 
     @Test
@@ -97,7 +97,7 @@ class DisInMealDaoTest {
             dishInMealDao.insertAll(dishesInMeals)
             dishInMealDao.deleteAll(dishesInMeals)
             val retrievedDishesInMeals = dishInMealDao.getAllDishesInMeals().firstOrNull()
-            assert(retrievedDishesInMeals == null)
+            assert(retrievedDishesInMeals == null) { "Expected null, but got $retrievedDishesInMeals" }
         }
 
     @Test(expected = SQLiteConstraintException::class)
@@ -105,8 +105,8 @@ class DisInMealDaoTest {
     fun `DishInMealDao_Insert dish in meal with non-existent meal foreign key`() =
         runBlocking<Unit> {
             val dishInMeal = DishInMeal(100, loadDishInMeals()[0].dishId)
-            val meal = Meal(id = 1)
-            val dish = Dish(id = dishInMeal.dishId)
+            val meal = Meal(mealId = 1)
+            val dish = Dish(dishId = dishInMeal.dishId)
             mealDao.insert(meal)
             dishDao.insert(dish)
 
@@ -118,8 +118,8 @@ class DisInMealDaoTest {
     fun `DishInMealDao_Insert dish in meal with non-existent dish foreign key`() =
         runBlocking<Unit> {
             val dishInMeal = DishInMeal(loadDishInMeals()[0].mealId, 100)
-            val meal = Meal(id = dishInMeal.mealId)
-            val dish = Dish(id = 1)
+            val meal = Meal(mealId = dishInMeal.mealId)
+            val dish = Dish(dishId = 1)
             mealDao.insert(meal)
             dishDao.insert(dish)
             dishInMealDao.insert(dishInMeal)

@@ -71,6 +71,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -90,9 +92,11 @@ import com.jimmy.parentsmealplanner.ui.shared.Occasion
 import com.jimmy.parentsmealplanner.ui.shared.Rating
 import com.jimmy.parentsmealplanner.ui.shared.TopBar
 import com.jimmy.parentsmealplanner.ui.shared.UserDetails
+import com.jimmy.parentsmealplanner.ui.theme.AppTheme
 import com.jimmy.parentsmealplanner.ui.theme.LocalDarkTheme
 import com.jimmy.parentsmealplanner.ui.theme.ParentsMealPlannerTheme
 import com.jimmy.parentsmealplanner.util.checkResult
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
@@ -116,7 +120,6 @@ object MealPlanningDest : NavigationDestination {
  * @param viewModel ViewModel for the meal planner screen.
  * @param mainViewModel Main ViewModel for the activity
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MealPlanner(
     modifier: Modifier = Modifier,
@@ -132,49 +135,93 @@ fun MealPlanner(
 ) {
     val mealUiState by viewModel.mealUiState.collectAsStateWithLifecycle()
     val userUiState by viewModel.userUiState.collectAsStateWithLifecycle()
-    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
-    val showUserDetailsDialog = rememberSaveable { mutableStateOf(false) }
-    val showDeleteUserDialog = rememberSaveable { mutableStateOf(false) }
+
     val isLoading by viewModel.loading.collectAsState()
-    val listState = rememberLazyListState()
-    val scope = rememberCoroutineScope()
-    val context = LocalContext.current
-    val targetOriginalName = remember { mutableStateOf("") }
 
     LaunchedEffect(key1 = true) {
         viewModel.initializeData()
     }
+
+    MealPlanningScreen(
+        modifier = modifier,
+        userUiState = userUiState,
+        mealUiState = mealUiState,
+        saveTargetUser = viewModel::saveTargetUser,
+        updateTargetUser = { viewModel.updateTargetUser(it) },
+        viewModelScope = viewModel.viewModelScope,
+        onMealClick = navigateToMealDetail,
+        deleteUser = { viewModel.deleteUser(it) },
+        incrementSelectedDay = { viewModel.incrementSelectedDay(it) },
+        updateSelectedDay = { viewModel.updateSelectedDay(it) },
+        updateSelectedUser = { viewModel.updateSelectedUser(it) },
+        deleteInstance = { viewModel.deleteInstance(it) },
+        changeTheme = { mainViewModel.changeTheme(it) },
+    )
+
+    when {
+        isLoading -> {
+            IndeterminateCircularIndicator()
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MealPlanningScreen(
+    modifier: Modifier = Modifier,
+    userUiState: UserUiState,
+    mealUiState: MealUiState,
+    saveTargetUser: (suspend () -> Boolean) = { true },
+    updateTargetUser: (userDetails: UserDetails) -> Unit = { _ -> },
+    viewModelScope: CoroutineScope = rememberCoroutineScope(),
+    onMealClick: (mealId: Long, date: LocalDate, occasion: Occasion, userId: Long, instanceId: Long) -> Unit = { _, _, _, _, _ -> },
+    deleteUser: (UserDetails) -> Unit = { _ -> },
+    incrementSelectedDay: (Int) -> Unit = { },
+    updateSelectedDay: (newSelectedDay: LocalDate) -> Unit = { _ -> },
+    updateSelectedUser: (newSelectedUser: Long) -> Unit = { _ -> },
+    deleteInstance: (Long) -> Unit = { _ -> },
+    changeTheme: (AppTheme) -> Unit = { _ -> },
+) {
+    val scope = rememberCoroutineScope()
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
+    val showUserDetailsDialog = rememberSaveable { mutableStateOf(false) }
+    val showDeleteUserDialog = rememberSaveable { mutableStateOf(false) }
+    val targetOriginalName = remember { mutableStateOf("") }
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = mealUiState.selectedDay.dayOfWeek.ordinal)
+    val context = LocalContext.current
 
     when {
         showUserDetailsDialog.value -> {
             UserDialog(
                 userDetails = userUiState.targetUserDetails,
                 onDismissRequest = { showUserDetailsDialog.value = false },
-                onNameChange = viewModel::updateTargetUser,
+                onNameChange = updateTargetUser,
                 onConfirmation = {
-                    viewModel.viewModelScope.launch {
-                        val result = viewModel.saveTargetUser()
+                    viewModelScope.launch {
+                        val result = saveTargetUser()
                         checkResult(
                             result = result,
                             context = context,
                             onSuccess = { showUserDetailsDialog.value = false },
-                            errorMessage = "A user with that name already exists."
+                            errorMessage = "A user with that name already exists.",
                         )
                     }
                 },
                 titleText =
                     when (userUiState.targetUserDetails.id) {
                         0L -> stringResource(R.string.new_user)
-                        else -> "${stringResource(R.string.edit_user)} " +
-                            targetOriginalName.value
+                        else ->
+                            "${stringResource(R.string.edit_user)} " +
+                                targetOriginalName.value
                     },
             )
         }
+
         showDeleteUserDialog.value -> {
             DeleteUserDialog(
                 onDismissRequest = { showDeleteUserDialog.value = false },
                 onConfirmation = {
-                    viewModel.deleteUser(userUiState.targetUserDetails)
+                    deleteUser(userUiState.targetUserDetails)
                     showDeleteUserDialog.value = false
                 },
                 userName = userUiState.targetUserDetails.name,
@@ -189,35 +236,37 @@ fun MealPlanner(
                 title = stringResource(id = R.string.app_name),
                 canNavigateBack = false,
                 scrollBehavior = scrollBehavior,
-                onThemeToggle = { mainViewModel.changeTheme(it) },
+                onThemeToggle = { changeTheme(it) },
             )
         },
-    ) {
+    ) { paddingValues ->
         Column(
-            modifier = Modifier.padding(paddingValues = it),
+            modifier = Modifier.padding(paddingValues = paddingValues),
         ) {
             WeekBar(
                 daysOfSelectedWeek = mealUiState.daysOfSelectedWeek,
-                onSwipe = viewModel::incrementSelectedDay,
-                onDayClick = { index: Int, day: LocalDate -> scope.launch {
-                    listState.animateScrollToItem(index)
-                    viewModel.updateSelectedDay(day)
-                } },
+                onSwipe = { daysToIncrement -> incrementSelectedDay(daysToIncrement) },
+                onDayClick = { index: Int, day: LocalDate ->
+                    scope.launch {
+                        listState.animateScrollToItem(index)
+                        updateSelectedDay(day)
+                    }
+                },
             )
             UserBar(
                 userUiState = userUiState,
-                onUserChange = viewModel::updateSelectedUser,
+                onUserChange = { newSelectedUserId -> updateSelectedUser(newSelectedUserId) },
                 onUserEditClick = { userDetails ->
-                    viewModel.updateTargetUser(userDetails)
+                    updateTargetUser(userDetails)
                     targetOriginalName.value = userDetails.name
                     showUserDetailsDialog.value = true
                 },
                 onUserAddClick = {
-                    viewModel.updateTargetUser()
+                    updateTargetUser(UserDetails())
                     showUserDetailsDialog.value = true
                 },
                 onUserDeleteClick = { userDetails ->
-                    viewModel.updateTargetUser(userDetails)
+                    updateTargetUser(userDetails)
                     showDeleteUserDialog.value = true
                 },
             )
@@ -225,16 +274,10 @@ fun MealPlanner(
                 modifier = Modifier,
                 mealUiState = mealUiState,
                 userUiState = userUiState,
-                onMealClick = navigateToMealDetail,
-                onMealDeleteClick = viewModel::deleteInstance,
+                onMealClick = onMealClick,
+                onMealDeleteClick = { instanceId -> deleteInstance(instanceId) },
                 daysOfWeekListState = listState,
             )
-        }
-    }
-
-    when {
-        isLoading -> {
-            IndeterminateCircularIndicator()
         }
     }
 }
@@ -253,23 +296,33 @@ fun MealPlanner(
 @Preview(apiLevel = 33)
 fun WeekBar(
     modifier: Modifier = Modifier,
-    daysOfSelectedWeek: List<LocalDate> = listOf(),
+    daysOfSelectedWeek: List<LocalDate> =
+        listOf(
+            LocalDate(2019, 12, 30),
+            LocalDate(2019, 12, 31),
+            LocalDate(2020, 1, 1),
+            LocalDate(2020, 1, 2),
+            LocalDate(2020, 1, 3),
+            LocalDate(2020, 1, 4),
+            LocalDate(2020, 1, 5),
+        ),
     onSwipe: (Int) -> Unit = { _ -> },
-    onDayClick: (Int, LocalDate) -> Unit = {_, _, -> },
+    onDayClick: (Int, LocalDate) -> Unit = { _, _ -> },
 ) {
     val density = LocalDensity.current
     val screenWidthDp = LocalConfiguration.current.screenWidthDp.dp
     val screenWidthPx = with(density) { screenWidthDp.toPx() }
     val currentDay = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
 
-    val weekSwipeState = remember {
-        AnchoredDraggableState(
-            initialValue = DragAnchors.Middle,
-            positionalThreshold = { distance: Float -> distance * 0.5f },
-            velocityThreshold = { with(density) { 100.dp.toPx() } },
-            animationSpec = tween(),
-        )
-    }
+    val weekSwipeState =
+        remember {
+            AnchoredDraggableState(
+                initialValue = DragAnchors.Middle,
+                positionalThreshold = { distance: Float -> distance * 0.5f },
+                velocityThreshold = { with(density) { 100.dp.toPx() } },
+                animationSpec = tween(),
+            )
+        }
 
     // Change the week bar to the previous or next week when swiped
     LaunchedEffect(weekSwipeState.currentValue) {
@@ -277,8 +330,7 @@ fun WeekBar(
             if (state.currentValue == DragAnchors.Start) {
                 onSwipe(7)
                 state.animateTo(DragAnchors.Middle)
-            }
-            else if (state.currentValue == DragAnchors.End) {
+            } else if (state.currentValue == DragAnchors.End) {
                 onSwipe(-7)
                 state.animateTo(DragAnchors.Middle)
             }
@@ -286,44 +338,59 @@ fun WeekBar(
     }
 
     val alpha: Float by animateFloatAsState(
-        targetValue = if (weekSwipeState.targetValue != DragAnchors.Middle)
-            weekSwipeState.progress else 0f,
-        animationSpec = tween(
-            easing = LinearEasing
-        ), label = "Week Bar Arrow Alpha Animation"
+        targetValue =
+            if (weekSwipeState.targetValue != DragAnchors.Middle) {
+                weekSwipeState.progress
+            } else {
+                0f
+            },
+        animationSpec =
+            tween(
+                easing = LinearEasing,
+            ),
+        label = "Week Bar Arrow Alpha Animation",
     )
     val scaleY: Float by animateFloatAsState(
         targetValue = weekSwipeState.progress,
-        animationSpec = tween(
-            easing = LinearEasing
-        ), label = "Week Bar Arrow Size Animation"
+        animationSpec =
+            tween(
+                easing = LinearEasing,
+            ),
+        label = "Week Bar Arrow Size Animation",
     )
 
     Box(
-        modifier = modifier
-            .fillMaxWidth(),
-        contentAlignment = Alignment.Center) {
-        Box(
-            modifier = Modifier
+        modifier =
+            modifier
                 .fillMaxWidth(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth(),
             contentAlignment = Alignment.Center,
-        ) {// Week Bar Arrow Animation
-            if (weekSwipeState.targetValue <= DragAnchors.Middle && !weekSwipeState.offset.isNaN()
-                && weekSwipeState.offset < 0) {
+        ) { // Week Bar Arrow Animation
+            if (weekSwipeState.targetValue <= DragAnchors.Middle && !weekSwipeState.offset.isNaN() &&
+                weekSwipeState.offset < 0
+            ) {
                 Icon(
-                    modifier = Modifier
-                        .graphicsLayer(alpha = alpha, scaleY = scaleY)
-                        .align(Alignment.CenterEnd),
+                    modifier =
+                        Modifier
+                            .graphicsLayer(alpha = alpha, scaleY = scaleY)
+                            .align(Alignment.CenterEnd),
                     imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                     contentDescription = "Arrow",
                 )
             }
-            if (weekSwipeState.targetValue >= DragAnchors.Middle && !weekSwipeState.offset.isNaN()
-                && weekSwipeState.offset > 0) {
+            if (weekSwipeState.targetValue >= DragAnchors.Middle && !weekSwipeState.offset.isNaN() &&
+                weekSwipeState.offset > 0
+            ) {
                 Icon(
-                    modifier = Modifier
-                        .graphicsLayer(alpha = alpha, scaleY = scaleY)
-                        .align(Alignment.CenterStart),
+                    modifier =
+                        Modifier
+                            .graphicsLayer(alpha = alpha, scaleY = scaleY)
+                            .align(Alignment.CenterStart),
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Arrow",
                 )
@@ -332,46 +399,50 @@ fun WeekBar(
 
         // Row of days
         LazyRow(
-            modifier = modifier
-                .fillMaxWidth()
-                .offset {
-                    IntOffset(
-                        x = weekSwipeState
-                            .requireOffset()
-                            .roundToInt(), y = 0
-                    )
-                }
-                .onSizeChanged { size ->
-                    val dragEndPoint = size.width - screenWidthPx / 1.03f
-                    weekSwipeState.updateAnchors(
-                        DraggableAnchors {
-                            DragAnchors.entries
-                                .forEach { anchor ->
-                                    anchor at dragEndPoint * anchor.fraction
-                                }
-                        }
-                    )
-                },
-            horizontalArrangement = Arrangement.SpaceEvenly
+            modifier =
+                modifier
+                    .fillMaxWidth()
+                    .offset {
+                        IntOffset(
+                            x =
+                                weekSwipeState
+                                    .requireOffset()
+                                    .roundToInt(),
+                            y = 0,
+                        )
+                    }
+                    .onSizeChanged { size ->
+                        val dragEndPoint = size.width - screenWidthPx / 1.03f
+                        weekSwipeState.updateAnchors(
+                            DraggableAnchors {
+                                DragAnchors.entries
+                                    .forEach { anchor ->
+                                        anchor at dragEndPoint * anchor.fraction
+                                    }
+                            },
+                        )
+                    },
+            horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
             itemsIndexed(daysOfSelectedWeek) { index, day ->
                 Column(
-                    modifier = Modifier
-                        .clickable { onDayClick(index, day) }
-                        .let { modifier ->
-                            if (day == currentDay) {
-                                modifier.background(
-                                    shape = MaterialTheme.shapes.small,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            } else {
-                                modifier
+                    modifier =
+                        Modifier
+                            .clickable { onDayClick(index, day) }
+                            .let { modifier ->
+                                if (day == currentDay) {
+                                    modifier.background(
+                                        shape = MaterialTheme.shapes.small,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                } else {
+                                    modifier
+                                }
                             }
-                        }
-                        .anchoredDraggable(
-                            state = weekSwipeState,
-                            orientation = Orientation.Horizontal,
-                        ),
+                            .anchoredDraggable(
+                                state = weekSwipeState,
+                                orientation = Orientation.Horizontal,
+                            ),
                 ) {
                     Text(
                         text = day.dayOfWeek.toString().substring(0..2),
@@ -393,7 +464,6 @@ fun WeekBar(
  * The UserBar consists of a dropdown menu for selecting a user and an icon for adding a new user.
  *
  * @param userUiState The state of the user interface.
- * @param userValues A list of UserDetails objects. Each UserDetails object represents a user.
  * @param onUserChange The function that is called when a user is selected from the dropdown menu.
  * @param onUserEditClick The function that is called when the edit icon of a user is clicked in the dropdown menu.
  * @param onUserAddClick The function that is called when the add user icon is clicked.
@@ -403,11 +473,6 @@ fun WeekBar(
 @Preview
 fun UserBar(
     userUiState: UserUiState = UserUiState(),
-    userValues: List<UserDetails> =
-        listOf(
-            UserDetails(1, "user1"),
-            UserDetails(2, "user2"),
-        ),
     onUserChange: (userId: Long) -> Unit = {},
     onUserEditClick: (userDetails: UserDetails) -> Unit = {},
     onUserAddClick: () -> Unit = {},
@@ -416,9 +481,9 @@ fun UserBar(
     Row(modifier = Modifier.fillMaxWidth()) {
         UserDropdown(
             modifier =
-            Modifier
-                .fillMaxWidth(0.9f)
-                .padding(0.dp),
+                Modifier
+                    .fillMaxWidth(0.9f)
+                    .padding(0.dp),
             values = userUiState.allUsersDetails.sortedBy { it.name },
             onUserChange = onUserChange,
             onUserDeleteClick = onUserDeleteClick,
@@ -428,10 +493,10 @@ fun UserBar(
         )
         Icon(
             modifier =
-            Modifier
-                .size(width = 200.dp, height = 40.dp)
-                .align(Alignment.CenterVertically)
-                .clickable { onUserAddClick() },
+                Modifier
+                    .size(width = 200.dp, height = 40.dp)
+                    .align(Alignment.CenterVertically)
+                    .clickable { onUserAddClick() },
             imageVector = Icons.Default.Add,
             contentDescription = "Add User Button",
         )
@@ -469,11 +534,17 @@ fun UserDropdown(
 
     // Dropdown menu of users
     ExposedDropdownMenuBox(
+        modifier =
+            modifier.fillMaxWidth().semantics {
+                stateDescription =
+                    when (expanded) {
+                        true -> "User Dropdown Expanded" else -> "User Dropdown Collapsed"
+                    }
+            },
         expanded = expanded,
         onExpandedChange = {
             expanded = !expanded
         },
-        modifier = modifier.fillMaxWidth(),
     ) {
         TextField(
             value = selectedValue,
@@ -485,9 +556,9 @@ fun UserDropdown(
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             colors = ExposedDropdownMenuDefaults.textFieldColors(),
             modifier =
-            Modifier
-                .fillMaxWidth()
-                .menuAnchor(),
+                Modifier
+                    .fillMaxWidth()
+                    .menuAnchor(),
         )
         ExposedDropdownMenu(
             modifier = Modifier.fillMaxWidth(),
@@ -505,7 +576,7 @@ fun UserDropdown(
                         Icon(
                             modifier = Modifier.clickable { onUserEditClick(userDetails) },
                             imageVector = Icons.Default.Edit,
-                            contentDescription = "Edit User ${userDetails.name} Button",
+                            contentDescription = "Button: Edit User ${userDetails.name}",
                         )
                     },
                     leadingIcon = {
@@ -513,7 +584,7 @@ fun UserDropdown(
                             Icon(
                                 modifier = Modifier.clickable { onUserDeleteClick(userDetails) },
                                 imageVector = Icons.Default.Close,
-                                contentDescription = "Delete User ${userDetails.name} Button",
+                                contentDescription = "Button: Delete User ${userDetails.name}",
                             )
                         }
                     },
@@ -581,9 +652,9 @@ fun DeleteUserConfirmation(
 ) {
     Card(
         modifier =
-        Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
+            Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
         shape = RoundedCornerShape(16.dp),
     ) {
         Column(
@@ -591,11 +662,11 @@ fun DeleteUserConfirmation(
         ) {
             Text( // Title
                 modifier =
-                Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .padding(top = 12.dp),
+                    Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .padding(top = 12.dp),
                 style = MaterialTheme.typography.titleLarge,
-                text = "Delete ${userName}'s meal plan?",
+                text = "Delete $userName's meal plan?",
             )
             Row( // Buttons
                 modifier = Modifier.fillMaxWidth(),
@@ -636,9 +707,9 @@ fun UserForm(
 ) {
     Card(
         modifier =
-        Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
+            Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
         shape = RoundedCornerShape(16.dp),
     ) {
         Column(
@@ -646,9 +717,9 @@ fun UserForm(
         ) {
             Text( // Title
                 modifier =
-                Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .padding(top = 12.dp),
+                    Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .padding(top = 12.dp),
                 style = MaterialTheme.typography.titleLarge,
                 text = titleText,
             )
@@ -698,34 +769,28 @@ fun UserForm(
  * @param daysOfWeekListState The state of the list of days. This is used to scroll to the selected day.
  */
 @Composable
-
 fun MealPlanningBody(
     modifier: Modifier = Modifier,
     mealUiState: MealUiState = MealUiState(),
     onMealClick: (mealId: Long, date: LocalDate, occasion: Occasion, userId: Long, instanceId: Long)
-        -> Unit = { _, _, _, _, _ -> },
+    -> Unit = { _, _, _, _, _ -> },
     userUiState: UserUiState = UserUiState(),
     onMealDeleteClick: (Long) -> Unit = { _ -> },
-    daysOfWeekListState: LazyListState = LazyListState(),
+    daysOfWeekListState: LazyListState = rememberLazyListState(),
 ) {
-    // Scroll down to the selected day
-    LaunchedEffect(key1 = true) {
-        daysOfWeekListState.animateScrollToItem(mealUiState.selectedDay.dayOfWeek.ordinal)
-    }
-
     // Display the meals for each day of the selected week
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
         state = daysOfWeekListState,
     ) {
-        items(mealUiState.daysOfSelectedWeek) {day ->
+        items(mealUiState.daysOfSelectedWeek) { day ->
             DayOfTheWeek(
                 date = day,
                 mealInstances =
-                mealUiState.getMealInstancesForDateAndUser(
-                    date = day,
-                    userId = userUiState.selectedUserDetails.id,
-                ),
+                    mealUiState.getMealInstancesForDateAndUser(
+                        date = day,
+                        userId = userUiState.selectedUserDetails.id,
+                    ),
                 onMealClick = onMealClick,
                 userId = userUiState.selectedUserDetails.id,
                 onDeleteClick = onMealDeleteClick,
@@ -735,8 +800,9 @@ fun MealPlanningBody(
 }
 
 @Composable
-@Preview(apiLevel = 33,
-    name = "BodyPreviewDark"
+@Preview(
+    apiLevel = 33,
+    name = "BodyPreviewDark",
 )
 fun MealPlanningBodyPreviewDark() {
     ParentsMealPlannerTheme(darkTheme = true) {
@@ -745,15 +811,15 @@ fun MealPlanningBodyPreviewDark() {
 }
 
 @Composable
-@Preview(apiLevel = 33,
-    name = "BodyPreviewLight"
+@Preview(
+    apiLevel = 33,
+    name = "BodyPreviewLight",
 )
 fun MealPlanningBodyPreviewLight() {
     ParentsMealPlannerTheme(darkTheme = false) {
         MealPlanningBody()
     }
 }
-
 
 /**
  * Displays the meals planned for a specific day.
@@ -948,17 +1014,18 @@ fun OccasionMeals(
                 Image(
                     painter = painterResource(id = occasion.icon),
                     contentDescription = null,
-                    colorFilter = ColorFilter.tint(
-                        color = if (LocalDarkTheme.current) Color.White else Color.Black
-                    ),
-                    modifier = Modifier.size(48.dp)
+                    colorFilter =
+                        ColorFilter.tint(
+                            color = if (LocalDarkTheme.current) Color.White else Color.Black,
+                        ),
+                    modifier = Modifier.size(48.dp),
                 )
                 Column {
                     Text(text = occasion.name)
                     mealsForOccasion.forEach { mealInstanceDetails ->
                         MealHolder(
-                            mealInstance = mealInstanceDetails,
                             modifier = modifier.padding(1.dp),
+                            mealInstance = mealInstanceDetails,
                             onEditClick = onEditClick,
                             onDeleteClick = onDeleteClick,
                         )
@@ -1006,7 +1073,7 @@ fun MealHolder(
     ) -> Unit = { _, _, _, _, _ -> },
     onDeleteClick: (instanceId: Long) -> Unit = { _ -> },
 ) {
-    var expanded by rememberSaveable { mutableStateOf(true) }
+    var expanded by rememberSaveable { mutableStateOf(false) }
     val imageVector: ImageVector = (
         when (expanded) {
             true -> ImageVector.vectorResource(id = R.drawable.baseline_arrow_drop_up_24)
@@ -1014,39 +1081,46 @@ fun MealHolder(
         }
     )
     Row(
-        modifier = Modifier
-            .background(
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.background,
-            ),
+        modifier =
+            modifier
+                .background(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.background,
+                )
+                .semantics {
+                    stateDescription =
+                        when (expanded) {
+                            true -> "Expanded" else -> "Collapsed"
+                        }
+                },
     ) {
         Icon(
             modifier =
-            Modifier
-                .clickable {
-                    onDeleteClick(
-                        mealInstance.mealInstanceId,
-                    )
-                }
-                .size(18.dp)
-                .align(Alignment.CenterVertically),
+                Modifier
+                    .clickable {
+                        onDeleteClick(
+                            mealInstance.mealInstanceId,
+                        )
+                    }
+                    .size(18.dp)
+                    .align(Alignment.CenterVertically),
             imageVector = Icons.Default.Close,
             contentDescription = "Edit meal",
         )
         Column(modifier = Modifier.align(Alignment.CenterVertically)) {
             MealText(
                 modifier =
-                Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .clickable {
-                        onEditClick(
-                            mealInstance.mealDetails.mealId,
-                            mealInstance.date,
-                            mealInstance.occasion,
-                            mealInstance.userId,
-                            mealInstance.mealInstanceId,
-                        )
-                    },
+                    Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .clickable {
+                            onEditClick(
+                                mealInstance.mealDetails.mealId,
+                                mealInstance.date,
+                                mealInstance.occasion,
+                                mealInstance.userId,
+                                mealInstance.mealInstanceId,
+                            )
+                        },
                 mealName = mealInstance.mealDetails.name,
             )
         }
@@ -1054,24 +1128,25 @@ fun MealHolder(
         if (mealInstance.mealDetails.dishes.isNotEmpty()) {
             Image(
                 modifier =
-                Modifier
-                    .padding(start = 2.dp, top = 2.dp)
-                    .size(30.dp)
-                    .clickable { expanded = !expanded }
-                    .align(Alignment.CenterVertically),
+                    Modifier
+                        .padding(start = 2.dp, top = 2.dp)
+                        .size(30.dp)
+                        .clickable { expanded = !expanded }
+                        .align(Alignment.CenterVertically),
                 imageVector = imageVector,
-                colorFilter = ColorFilter.tint(
-                    color = if (LocalDarkTheme.current) Color.White else Color.Black
-                ),
+                colorFilter =
+                    ColorFilter.tint(
+                        color = if (LocalDarkTheme.current) Color.White else Color.Black,
+                    ),
                 contentDescription = "Button: Expand/Collapse meal list",
             )
         }
         Column(
             modifier =
-            Modifier
-                .padding(4.dp)
-                .fillMaxWidth()
-                .align(Alignment.Top),
+                Modifier
+                    .padding(4.dp)
+                    .fillMaxWidth()
+                    .align(Alignment.Top),
         ) {
             Icon(
                 modifier =

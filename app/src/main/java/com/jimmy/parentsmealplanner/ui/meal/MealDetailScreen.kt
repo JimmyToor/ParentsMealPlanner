@@ -1107,7 +1107,7 @@ private fun DishFieldSection(
             searchResults = if (filterByDefaultRating) searchResults.filter {
                 it.rating == dish.rating
             }
-            else searchResults ,
+            else searchResults,
             valid = !isDuplicate(index),
             onDeleteDishClick = { onDeleteDishClick(index) },
             onRestoreDishClick = onRestoreDishClick,
